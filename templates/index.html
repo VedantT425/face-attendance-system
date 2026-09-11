@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Face Attendance — Live</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+</head>
+<body>
+
+<!-- ── NAV ─────────────────────────────────────────── -->
+<nav class="navbar">
+  <div class="brand">
+    <i class="fa-solid fa-eye"></i>
+    FaceAttend
+  </div>
+  <div class="nav-links">
+    <a href="/" class="active"><i class="fa-solid fa-video"></i> Live</a>
+    <a href="/register"><i class="fa-solid fa-user-plus"></i> Register</a>
+    <a href="/dashboard"><i class="fa-solid fa-chart-bar"></i> Dashboard</a>
+  </div>
+</nav>
+
+<!-- ── MAIN CONTENT ─────────────────────────────────── -->
+<div class="page-live">
+
+  <!-- Left: camera feed -->
+  <div class="camera-panel">
+    <div class="panel-header">
+      <span><i class="fa-solid fa-circle recording-dot"></i> Live Recognition</span>
+      <span id="face-count" class="badge badge-info">0 faces</span>
+    </div>
+    <div class="camera-wrapper">
+      <img id="camera-stream" src="/video_feed" alt="Live camera feed" />
+    </div>
+    <p class="camera-hint"><i class="fa-solid fa-info-circle"></i>
+      Faces are recognized automatically. Attendance is marked once per person per day.
+    </p>
+  </div>
+
+  <!-- Right: today's attendance -->
+  <div class="attendance-panel">
+    <div class="panel-header">
+      <span><i class="fa-solid fa-clipboard-check"></i> Today's Attendance</span>
+      <span id="today-date" class="date-badge">{{ today }}</span>
+    </div>
+
+    <!-- Stats bar -->
+    <div class="stats-bar">
+      <div class="stat-item">
+        <div class="stat-number" id="present-count">0</div>
+        <div class="stat-label">Present</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-number" id="registered-count">0</div>
+        <div class="stat-label">Registered</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-number" id="absent-count">0</div>
+        <div class="stat-label">Absent</div>
+      </div>
+    </div>
+
+    <!-- Attendance list -->
+    <div class="att-list-wrapper">
+      <ul id="att-list" class="att-list">
+        <li class="att-empty">Waiting for recognition…</li>
+      </ul>
+    </div>
+
+    <!-- Actions -->
+    <div class="panel-actions">
+      <a href="/api/export" class="btn btn-secondary">
+        <i class="fa-solid fa-download"></i> Export CSV
+      </a>
+      <a href="/dashboard" class="btn btn-primary">
+        <i class="fa-solid fa-chart-bar"></i> Dashboard
+      </a>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── TOAST ─────────────────────────────────────────── -->
+<div id="toast" class="toast hidden"></div>
+
+<script src="/static/js/main.js"></script>
+<script>
+  // Poll attendance every 3 s
+  async function refreshAttendance() {
+    const today = document.getElementById("today-date").textContent;
+    const res = await fetch(`/api/attendance?date=${today}`);
+    const data = await res.json();
+
+    const regRes = await fetch("/api/registered");
+    const registered = await regRes.json();
+
+    const present = data.records;
+    const presentNames = present.map(r => r.name);
+    const absent = registered.filter(n => !presentNames.includes(n));
+
+    document.getElementById("present-count").textContent = present.length;
+    document.getElementById("registered-count").textContent = registered.length;
+    document.getElementById("absent-count").textContent = absent.length;
+
+    const list = document.getElementById("att-list");
+    if (present.length === 0) {
+      list.innerHTML = '<li class="att-empty">Waiting for recognition…</li>';
+    } else {
+      // Newly appeared names get a flash animation
+      const existing = [...list.querySelectorAll("[data-name]")].map(el => el.dataset.name);
+      list.innerHTML = present.map(r => {
+        const isNew = !existing.includes(r.name);
+        return `<li class="att-item ${isNew ? "att-new" : ""}" data-name="${r.name}">
+          <span class="att-avatar">${r.name[0].toUpperCase()}</span>
+          <div class="att-info">
+            <span class="att-name">${r.name}</span>
+            <span class="att-time"><i class="fa-solid fa-clock"></i> ${r.time}</span>
+          </div>
+          <span class="att-status"><i class="fa-solid fa-check-circle"></i></span>
+        </li>`;
+      }).join("");
+
+      if (present.length > (existing.length || 0)) {
+        const newest = present[present.length - 1];
+        if (!existing.includes(newest.name)) {
+          showToast(`✅ ${newest.name} marked present!`);
+        }
+      }
+    }
+  }
+
+  refreshAttendance();
+  setInterval(refreshAttendance, 3000);
+</script>
+</body>
+</html>

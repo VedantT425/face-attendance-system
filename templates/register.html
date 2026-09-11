@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FaceAttend — Register</title>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="brand"><i class="fa-solid fa-eye"></i> FaceAttend</div>
+  <div class="nav-links">
+    <a href="/"><i class="fa-solid fa-video"></i> Live</a>
+    <a href="/register" class="active"><i class="fa-solid fa-user-plus"></i> Register</a>
+    <a href="/dashboard"><i class="fa-solid fa-chart-bar"></i> Dashboard</a>
+  </div>
+</nav>
+
+<div class="page-register">
+
+  <!-- ── Registration form ── -->
+  <div class="register-card">
+    <h2 class="card-title"><i class="fa-solid fa-user-plus"></i> Register New Face</h2>
+    <p class="card-subtitle">Position your face in the frame, enter your name, and capture 3 photos for best results.</p>
+
+    <!-- Webcam preview -->
+    <div class="webcam-wrapper">
+      <video id="video" autoplay playsinline></video>
+      <canvas id="canvas" style="display:none;"></canvas>
+      <div id="capture-overlay" class="capture-overlay hidden">
+        <i class="fa-solid fa-check-circle"></i>
+      </div>
+    </div>
+
+    <!-- Thumbnails of captured frames -->
+    <div id="thumbs" class="thumb-row"></div>
+
+    <!-- Name input -->
+    <div class="form-group">
+      <label for="name-input"><i class="fa-solid fa-id-badge"></i> Full Name</label>
+      <input type="text" id="name-input" placeholder="e.g. Vedant Sharma" autocomplete="off"/>
+    </div>
+
+    <!-- Capture count indicator -->
+    <div class="capture-status">
+      <span id="capture-label">Captures: <strong id="capture-count">0</strong> / 3</span>
+      <div class="capture-dots">
+        <div class="cdot" id="dot-0"></div>
+        <div class="cdot" id="dot-1"></div>
+        <div class="cdot" id="dot-2"></div>
+      </div>
+    </div>
+
+    <!-- Buttons -->
+    <div class="form-actions">
+      <button id="btn-capture" class="btn btn-primary">
+        <i class="fa-solid fa-camera"></i> Capture Photo
+      </button>
+      <button id="btn-register" class="btn btn-success" disabled>
+        <i class="fa-solid fa-user-check"></i> Register
+      </button>
+      <button id="btn-reset" class="btn btn-secondary">
+        <i class="fa-solid fa-rotate-left"></i> Reset
+      </button>
+    </div>
+
+    <div id="reg-message" class="reg-message hidden"></div>
+  </div>
+
+  <!-- ── Registered people ── -->
+  <div class="registered-card">
+    <h2 class="card-title"><i class="fa-solid fa-users"></i> Registered People</h2>
+    <ul class="registered-list" id="reg-list">
+      {% if registered %}
+        {% for name in registered %}
+        <li class="reg-item">
+          <span class="att-avatar">{{ name[0].upper() }}</span>
+          <span class="reg-name">{{ name }}</span>
+          <button class="btn-icon delete-btn" data-name="{{ name }}" title="Remove">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        </li>
+        {% endfor %}
+      {% else %}
+        <li class="att-empty">No one registered yet.</li>
+      {% endif %}
+    </ul>
+  </div>
+
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="/static/js/main.js"></script>
+<script>
+  const video = document.getElementById("video");
+  const canvas = document.getElementById("canvas");
+  const thumbs = document.getElementById("thumbs");
+  const captureCount = document.getElementById("capture-count");
+  const btnCapture = document.getElementById("btn-capture");
+  const btnRegister = document.getElementById("btn-register");
+  const btnReset = document.getElementById("btn-reset");
+  const nameInput = document.getElementById("name-input");
+  const regMessage = document.getElementById("reg-message");
+  const MAX_CAPTURES = 3;
+  let captures = [];
+
+  // Start webcam
+  navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false })
+    .then(stream => { video.srcObject = stream; })
+    .catch(err => { showToast("Camera error: " + err.message, "error"); });
+
+  // Capture a frame
+  btnCapture.addEventListener("click", () => {
+    if (captures.length >= MAX_CAPTURES) return;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d").drawImage(video, 0, 0);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+    captures.push(dataUrl);
+
+    // Thumbnail
+    const img = document.createElement("img");
+    img.src = dataUrl;
+    img.className = "thumb";
+    thumbs.appendChild(img);
+
+    captureCount.textContent = captures.length;
+    document.getElementById(`dot-${captures.length - 1}`).classList.add("dot-filled");
+
+    if (captures.length >= MAX_CAPTURES) {
+      btnCapture.disabled = true;
+      btnRegister.disabled = false;
+    }
+  });
+
+  // Register all captures
+  btnRegister.addEventListener("click", async () => {
+    const name = nameInput.value.trim();
+    if (!name) { showToast("Please enter a name.", "error"); return; }
+
+    btnRegister.disabled = true;
+    btnRegister.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Registering…';
+
+    let successCount = 0;
+    let lastMessage = "";
+
+    for (const imgData of captures) {
+      const res = await fetch("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, image: imgData })
+      });
+      const data = await res.json();
+      lastMessage = data.message;
+      if (data.success) successCount++;
+    }
+
+    if (successCount > 0) {
+      showReg(`✅ ${name} registered with ${successCount} photo(s)! Refreshing…`, "success");
+      setTimeout(() => location.reload(), 2000);
+    } else {
+      showReg(`❌ ${lastMessage}`, "error");
+      btnRegister.disabled = false;
+      btnRegister.innerHTML = '<i class="fa-solid fa-user-check"></i> Register';
+    }
+  });
+
+  // Reset
+  btnReset.addEventListener("click", () => {
+    captures = [];
+    thumbs.innerHTML = "";
+    captureCount.textContent = "0";
+    [0,1,2].forEach(i => document.getElementById(`dot-${i}`).classList.remove("dot-filled"));
+    btnCapture.disabled = false;
+    btnRegister.disabled = true;
+    regMessage.classList.add("hidden");
+  });
+
+  // Delete person
+  document.querySelectorAll(".delete-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const name = btn.dataset.name;
+      if (!confirm(`Remove ${name} from the system?`)) return;
+      const res = await fetch("/api/delete_person", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name })
+      });
+      const data = await res.json();
+      showToast(data.message, data.success ? "success" : "error");
+      if (data.success) setTimeout(() => location.reload(), 1500);
+    });
+  });
+
+  function showReg(msg, type) {
+    regMessage.textContent = msg;
+    regMessage.className = `reg-message reg-${type}`;
+  }
+</script>
+</body>
+</html>
