@@ -26,3 +26,4 @@ function showToast(message, type = "success") {
   clearTimeout(toast._timer);
   toast._timer = setTimeout(() => toast.classList.add("hidden"), 3500);
 }
+

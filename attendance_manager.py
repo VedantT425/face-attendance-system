@@ -134,3 +134,4 @@ class AttendanceManager:
         writer.writeheader()
         writer.writerows(records)
         return output.getvalue()
+

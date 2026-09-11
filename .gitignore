@@ -1,0 +1,15 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environment
+venv/
+
+# Database (optional — comment this out if you want to save attendance records)
+# data/attendance.db
+
+# OS files
+.DS_Store
+Thumbs.db
+

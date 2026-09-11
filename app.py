@@ -79,7 +79,7 @@ def camera_thread_fn():
         frame_counter += 1
 
         # Run face recognition every RECOGNITION_INTERVAL frames
-        if frame_counter % RECOGNITION_INTERVAL == 0 and engine.known_encodings:
+        if frame_counter % RECOGNITION_INTERVAL == 0 and engine._trained:
             annotated, results = engine.process_frame(frame.copy())
             cached_results = results
 
@@ -91,14 +91,14 @@ def camera_thread_fn():
             # Still draw cached boxes on current frame
             annotated = frame.copy()
             for r in cached_results:
-                top, right, bottom, left = r["box"]
+                x, y, w, h = r["box"]
                 name = r["name"]
                 conf = r["confidence"]
                 color = (0, 200, 100) if name != "Unknown" else (0, 60, 220)
-                cv2.rectangle(annotated, (left, top), (right, bottom), color, 2)
+                cv2.rectangle(annotated, (x, y), (x + w, y + h), color, 2)
                 label = f"{name}  {conf:.1f}%"
-                cv2.rectangle(annotated, (left, top - 24), (right, top), color, -1)
-                cv2.putText(annotated, label, (left + 4, top - 6),
+                cv2.rectangle(annotated, (x, y - 24), (x + w, y), color, -1)
+                cv2.putText(annotated, label, (x + 4, y - 6),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1)
 
         # Timestamp overlay
@@ -135,7 +135,24 @@ def generate_mjpeg():
         time.sleep(1 / 25)   # ~25 fps stream
 
 
+
 # ── Routes ────────────────────────────────────────────────────────────────────
+
+@app.route("/api/capture_frame")
+def api_capture_frame():
+    """Return the latest camera frame as base64 JPEG for registration page."""
+    import base64 as b64mod
+    with camera_lock:
+        frame = latest_frame
+
+    if frame is None:
+        return jsonify({"success": False, "message": "Camera not ready yet."}), 503
+
+    # Return a clean frame without annotation for registration
+    _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    encoded = b64mod.b64encode(buf.tobytes()).decode("utf-8")
+    return jsonify({"success": True, "image": f"data:image/jpeg;base64,{encoded}"})
+
 
 @app.route("/")
 def index():
@@ -238,3 +255,4 @@ if __name__ == "__main__":
     print("  Open: http://localhost:5000")
     print("=" * 55 + "\n")
     app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
+

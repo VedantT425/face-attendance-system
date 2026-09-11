@@ -145,3 +145,4 @@ RECOGNITION_INTERVAL = 5  # Run FR every N frames (lower = more CPU)
 ## 📄 License
 
 MIT © 2024 — Free to use for personal and educational projects.
+

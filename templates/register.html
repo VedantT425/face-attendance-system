@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>FaceAttend — Register</title>
+  <title>Vedant FC Attendance — Register</title>
   <link rel="stylesheet" href="/static/css/style.css"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
 </head>
 <body>
 
 <nav class="navbar">
-  <div class="brand"><i class="fa-solid fa-eye"></i> FaceAttend</div>
+  <div class="brand"><i class="fa-solid fa-eye"></i> Vedant FC Attendance</div>
   <div class="nav-links">
     <a href="/"><i class="fa-solid fa-video"></i> Live</a>
     <a href="/register" class="active"><i class="fa-solid fa-user-plus"></i> Register</a>
@@ -24,10 +24,10 @@
   <div class="register-card">
     <h2 class="card-title"><i class="fa-solid fa-user-plus"></i> Register New Face</h2>
     <p class="card-subtitle">Position your face in the frame, enter your name, and capture 3 photos for best results.</p>
-
-    <!-- Webcam preview -->
+    <!-- Webcam preview — uses server camera feed (avoids camera conflict) -->
     <div class="webcam-wrapper">
-      <video id="video" autoplay playsinline></video>
+      <img id="video-stream" src="/video_feed" alt="Camera feed"
+           style="width:100%;height:100%;object-fit:cover;display:block;border-radius:10px;"/>
       <canvas id="canvas" style="display:none;"></canvas>
       <div id="capture-overlay" class="capture-overlay hidden">
         <i class="fa-solid fa-check-circle"></i>
@@ -95,44 +95,65 @@
 
 <script src="/static/js/main.js"></script>
 <script>
-  const video = document.getElementById("video");
-  const canvas = document.getElementById("canvas");
-  const thumbs = document.getElementById("thumbs");
   const captureCount = document.getElementById("capture-count");
-  const btnCapture = document.getElementById("btn-capture");
-  const btnRegister = document.getElementById("btn-register");
-  const btnReset = document.getElementById("btn-reset");
-  const nameInput = document.getElementById("name-input");
-  const regMessage = document.getElementById("reg-message");
+  const btnCapture   = document.getElementById("btn-capture");
+  const btnRegister  = document.getElementById("btn-register");
+  const btnReset     = document.getElementById("btn-reset");
+  const nameInput    = document.getElementById("name-input");
+  const regMessage   = document.getElementById("reg-message");
+  const thumbs       = document.getElementById("thumbs");
   const MAX_CAPTURES = 3;
   let captures = [];
 
-  // Start webcam
-  navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false })
-    .then(stream => { video.srcObject = stream; })
-    .catch(err => { showToast("Camera error: " + err.message, "error"); });
-
-  // Capture a frame
-  btnCapture.addEventListener("click", () => {
+  // ── Capture frame from SERVER camera (no getUserMedia conflict!) ──────────
+  btnCapture.addEventListener("click", async () => {
     if (captures.length >= MAX_CAPTURES) return;
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext("2d").drawImage(video, 0, 0);
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
-    captures.push(dataUrl);
 
-    // Thumbnail
-    const img = document.createElement("img");
-    img.src = dataUrl;
-    img.className = "thumb";
-    thumbs.appendChild(img);
+    btnCapture.disabled = true;
+    btnCapture.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Capturing…';
 
-    captureCount.textContent = captures.length;
-    document.getElementById(`dot-${captures.length - 1}`).classList.add("dot-filled");
+    try {
+      const res  = await fetch("/api/capture_frame");
+      const data = await res.json();
 
-    if (captures.length >= MAX_CAPTURES) {
-      btnCapture.disabled = true;
-      btnRegister.disabled = false;
+      if (!data.success) {
+        showToast("Camera not ready. Please wait a moment.", "error");
+        btnCapture.disabled = false;
+        btnCapture.innerHTML = '<i class="fa-solid fa-camera"></i> Capture Photo';
+        return;
+      }
+
+      const imgData = data.image;
+      captures.push(imgData);
+
+      // Show thumbnail
+      const img = document.createElement("img");
+      img.src = imgData;
+      img.className = "thumb";
+      thumbs.appendChild(img);
+
+      // Flash overlay
+      const overlay = document.getElementById("capture-overlay");
+      overlay.classList.remove("hidden");
+      setTimeout(() => overlay.classList.add("hidden"), 600);
+
+      captureCount.textContent = captures.length;
+      document.getElementById(`dot-${captures.length - 1}`).classList.add("dot-filled");
+
+      if (captures.length >= MAX_CAPTURES) {
+        btnCapture.disabled = true;
+        btnCapture.innerHTML = '<i class="fa-solid fa-camera"></i> Capture Photo';
+        btnRegister.disabled = false;
+        showToast("3 photos captured! Enter name and click Register.", "success");
+      } else {
+        btnCapture.disabled = false;
+        btnCapture.innerHTML = '<i class="fa-solid fa-camera"></i> Capture Photo';
+      }
+
+    } catch (err) {
+      showToast("Error capturing frame: " + err.message, "error");
+      btnCapture.disabled = false;
+      btnCapture.innerHTML = '<i class="fa-solid fa-camera"></i> Capture Photo';
     }
   });
 
@@ -202,3 +223,4 @@
 </script>
 </body>
 </html>
+
