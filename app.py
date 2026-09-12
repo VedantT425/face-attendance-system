@@ -245,6 +245,40 @@ def api_register():
     return jsonify(result), status
 
 
+@app.route("/api/process_frame", methods=["POST"])
+def api_process_frame():
+    """Receives JSON: { "image": "<base64 JPEG>" } -> returns face recognition results & auto-marks attendance."""
+    data = request.get_json(force=True)
+    image_b64 = data.get("image", "")
+    if not image_b64:
+        return jsonify({"success": False, "message": "Image required."}), 400
+
+    try:
+        img_bytes = base64.b64decode(image_b64.split(",")[-1])
+        pil_img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        frame = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Image decode error: {e}"}), 400
+
+    annotated, results = engine.process_frame(frame)
+
+    # Auto mark attendance for recognized faces
+    marked_new = []
+    for r in results:
+        if r["name"] != "Unknown":
+            res = attendance_mgr.mark_attendance(r["name"])
+            if res.get("success") and not res.get("already_marked"):
+                marked_new.append(r["name"])
+
+    return jsonify({
+        "success": True,
+        "results": results,
+        "count": len(results),
+        "marked": marked_new
+    })
+
+
+
 @app.route("/api/delete_person", methods=["POST"])
 def api_delete_person():
     data = request.get_json(force=True)

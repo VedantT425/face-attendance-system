@@ -28,32 +28,29 @@
   <!-- Left: camera feed -->
   <div class="camera-panel">
     <div class="panel-header">
-      <span><i class="fa-solid fa-circle recording-dot"></i> Live Recognition</span>
+      <span><i class="fa-solid fa-circle recording-dot"></i> Live Face Recognition</span>
       <span id="face-count" class="badge badge-info">0 faces</span>
     </div>
 
-    {% if demo_mode %}
-    <div style="background:#1e293b;border:1px solid #334155;border-radius:8px;padding:12px 16px;margin-bottom:10px;display:flex;align-items:center;gap:10px;">
-      <i class="fa-solid fa-circle-info" style="color:#60a5fa;font-size:1.1rem;"></i>
-      <span style="color:#94a3b8;font-size:0.88rem;">
-        <strong style="color:#60a5fa;">Demo Mode:</strong>
-        Cloud server mein camera unavailable hai. Register page pe photo upload karo aur Dashboard se manually attendance mark karo.
-      </span>
-    </div>
-    {% endif %}
-
     <div class="camera-wrapper">
-      <img id="camera-stream" src="/video_feed" alt="Live camera feed" />
+      <video id="webcam-video" autoplay playsinline muted></video>
+      <canvas id="camera-overlay" class="camera-overlay-canvas"></canvas>
+      
+      <div id="camera-placeholder" class="camera-placeholder">
+        <i class="fa-solid fa-video-slash fa-3x" style="color:#6366f1;margin-bottom:14px;"></i>
+        <p id="camera-status-text" style="color:#e2e8f0;font-size:0.95rem;margin-bottom:14px;max-width:320px;">
+          Camera access is required for real-time face recognition.
+        </p>
+        <button id="btn-start-camera" class="btn btn-primary" onclick="initWebcam()">
+          <i class="fa-solid fa-camera"></i> Start Camera
+        </button>
+      </div>
     </div>
+    
     <p class="camera-hint"><i class="fa-solid fa-info-circle"></i>
-      {% if demo_mode %}
-        Demo mode active — register people via photo upload, then mark attendance manually from Dashboard.
-      {% else %}
-        Faces are recognized automatically. Attendance is marked once per person per day.
-      {% endif %}
+      Look directly into the camera. Recognized faces are automatically marked present for today.
     </p>
   </div>
-
 
   <!-- Right: today's attendance -->
   <div class="attendance-panel">
@@ -103,53 +100,171 @@
 
 <script src="/static/js/main.js"></script>
 <script>
-  // Poll attendance every 3 s
-  async function refreshAttendance() {
-    const today = document.getElementById("today-date").textContent;
-    const res = await fetch(`/api/attendance?date=${today}`);
-    const data = await res.json();
+  const video = document.getElementById("webcam-video");
+  const overlay = document.getElementById("camera-overlay");
+  const overlayCtx = overlay.getContext("2d");
+  const placeholder = document.getElementById("camera-placeholder");
+  const statusText = document.getElementById("camera-status-text");
+  const faceCountBadge = document.getElementById("face-count");
 
-    const regRes = await fetch("/api/registered");
-    const registered = await regRes.json();
+  let streamActive = false;
+  let processing = false;
+  const offscreenCanvas = document.createElement("canvas");
+  const offscreenCtx = offscreenCanvas.getContext("2d");
+  offscreenCanvas.width = 480;
+  offscreenCanvas.height = 360;
 
-    const present = data.records;
-    const presentNames = present.map(r => r.name);
-    const absent = registered.filter(n => !presentNames.includes(n));
-
-    document.getElementById("present-count").textContent = present.length;
-    document.getElementById("registered-count").textContent = registered.length;
-    document.getElementById("absent-count").textContent = absent.length;
-
-    const list = document.getElementById("att-list");
-    if (present.length === 0) {
-      list.innerHTML = '<li class="att-empty">Waiting for recognition…</li>';
-    } else {
-      // Newly appeared names get a flash animation
-      const existing = [...list.querySelectorAll("[data-name]")].map(el => el.dataset.name);
-      list.innerHTML = present.map(r => {
-        const isNew = !existing.includes(r.name);
-        return `<li class="att-item ${isNew ? "att-new" : ""}" data-name="${r.name}">
-          <span class="att-avatar">${r.name[0].toUpperCase()}</span>
-          <div class="att-info">
-            <span class="att-name">${r.name}</span>
-            <span class="att-time"><i class="fa-solid fa-clock"></i> ${r.time}</span>
-          </div>
-          <span class="att-status"><i class="fa-solid fa-check-circle"></i></span>
-        </li>`;
-      }).join("");
-
-      if (present.length > (existing.length || 0)) {
-        const newest = present[present.length - 1];
-        if (!existing.includes(newest.name)) {
-          showToast(`✅ ${newest.name} marked present!`);
-        }
-      }
+  async function initWebcam() {
+    try {
+      statusText.textContent = "Requesting camera permission…";
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          facingMode: "user"
+        },
+        audio: false
+      });
+      video.srcObject = stream;
+      await video.play();
+      streamActive = true;
+      placeholder.classList.add("hidden");
+      resizeOverlay();
+    } catch (err) {
+      console.error("Camera access error:", err);
+      statusText.textContent = "Camera access denied or not found. Please click 'Start Camera' and allow permission in your browser.";
+      placeholder.classList.remove("hidden");
+      showToast("Camera error: Please allow camera access in browser permissions", "error");
     }
   }
 
-  refreshAttendance();
-  setInterval(refreshAttendance, 3000);
+  function resizeOverlay() {
+    if (video.videoWidth && video.videoHeight) {
+      overlay.width = video.clientWidth;
+      overlay.height = video.clientHeight;
+    }
+  }
+  window.addEventListener("resize", resizeOverlay);
+
+  // Periodic frame processing
+  async function processCameraFrame() {
+    if (!streamActive || processing || video.readyState < 2) return;
+
+    processing = true;
+    try {
+      offscreenCtx.drawImage(video, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
+      const dataUrl = offscreenCanvas.toDataURL("image/jpeg", 0.7);
+
+      const res = await fetch("/api/process_frame", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: dataUrl })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        drawDetections(data.results || []);
+        faceCountBadge.textContent = `${data.count || 0} faces`;
+
+        if (data.marked && data.marked.length > 0) {
+          data.marked.forEach(name => {
+            showToast(`✅ ${name} marked present!`, "success");
+          });
+          refreshAttendance();
+        }
+      }
+    } catch (e) {
+      console.warn("Process frame error:", e);
+    } finally {
+      processing = false;
+    }
+  }
+
+  function drawDetections(results) {
+    overlay.width = video.clientWidth;
+    overlay.height = video.clientHeight;
+    overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+
+    if (!results || results.length === 0) return;
+
+    const scaleX = overlay.width / offscreenCanvas.width;
+    const scaleY = overlay.height / offscreenCanvas.height;
+
+    results.forEach(r => {
+      const [x, y, w, h] = r.box;
+      const rx = x * scaleX;
+      const ry = y * scaleY;
+      const rw = w * scaleX;
+      const rh = h * scaleY;
+
+      const isKnown = r.name && r.name !== "Unknown";
+      const color = isKnown ? "#10b981" : "#ef4444";
+
+      // Draw bounding box
+      overlayCtx.strokeStyle = color;
+      overlayCtx.lineWidth = 3;
+      overlayCtx.strokeRect(rx, ry, rw, rh);
+
+      // Label background
+      const label = isKnown ? `${r.name} ${r.confidence}%` : "Unknown";
+      overlayCtx.fillStyle = color;
+      const textWidth = overlayCtx.measureText(label).width + 16;
+      overlayCtx.fillRect(rx, Math.max(0, ry - 24), textWidth, 24);
+
+      // Label text
+      overlayCtx.fillStyle = "#ffffff";
+      overlayCtx.font = "bold 13px sans-serif";
+      overlayCtx.fillText(label, rx + 6, Math.max(16, ry - 6));
+    });
+  }
+
+  // Poll attendance every 3 s
+  async function refreshAttendance() {
+    const today = document.getElementById("today-date").textContent;
+    try {
+      const res = await fetch(`/api/attendance?date=${today}`);
+      const data = await res.json();
+
+      const regRes = await fetch("/api/registered");
+      const registered = await regRes.json();
+
+      const present = data.records;
+      const presentNames = present.map(r => r.name);
+      const absent = registered.filter(n => !presentNames.includes(n));
+
+      document.getElementById("present-count").textContent = present.length;
+      document.getElementById("registered-count").textContent = registered.length;
+      document.getElementById("absent-count").textContent = absent.length;
+
+      const list = document.getElementById("att-list");
+      if (present.length === 0) {
+        list.innerHTML = '<li class="att-empty">Waiting for recognition…</li>';
+      } else {
+        const existing = [...list.querySelectorAll("[data-name]")].map(el => el.dataset.name);
+        list.innerHTML = present.map(r => {
+          const isNew = !existing.includes(r.name);
+          return `<li class="att-item ${isNew ? "att-new" : ""}" data-name="${r.name}">
+            <span class="att-avatar">${r.name[0].toUpperCase()}</span>
+            <div class="att-info">
+              <span class="att-name">${r.name}</span>
+              <span class="att-time"><i class="fa-solid fa-clock"></i> ${r.time}</span>
+            </div>
+            <span class="att-status"><i class="fa-solid fa-check-circle"></i></span>
+          </li>`;
+        }).join("");
+      }
+    } catch (e) {
+      console.warn("Attendance poll error:", e);
+    }
+  }
+
+  // Initialize on page load
+  window.addEventListener("DOMContentLoaded", () => {
+    initWebcam();
+    refreshAttendance();
+    setInterval(processCameraFrame, 750);
+    setInterval(refreshAttendance, 4000);
+  });
 </script>
 </body>
 </html>
-

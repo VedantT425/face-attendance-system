@@ -23,22 +23,29 @@
   <!-- ── Registration form ── -->
   <div class="register-card">
     <h2 class="card-title"><i class="fa-solid fa-user-plus"></i> Register New Face</h2>
-    <p class="card-subtitle">Position your face in the frame, enter your name, and capture 3 photos for best results.</p>
-    <!-- Webcam preview — uses server camera feed (avoids camera conflict) -->
-    <div class="webcam-wrapper">
-      <img id="video-stream" src="/video_feed" alt="Camera feed"
-           style="width:100%;height:100%;object-fit:cover;display:block;border-radius:10px;"/>
-      <canvas id="canvas" style="display:none;"></canvas>
+    <p class="card-subtitle">Position your face in the camera, enter your name, and capture 3 photos for best accuracy.</p>
+    
+    <!-- Webcam preview — HTML5 browser webcam -->
+    <div class="webcam-wrapper" style="position: relative; overflow: hidden; border-radius: 10px; background: #000; min-height: 280px; display: flex; align-items: center; justify-content: center;">
+      <video id="webcam-video" autoplay playsinline muted
+             style="width:100%;height:100%;object-fit:cover;display:block;border-radius:10px;"></video>
       <div id="capture-overlay" class="capture-overlay hidden">
         <i class="fa-solid fa-check-circle"></i>
+      </div>
+      <div id="camera-placeholder" class="camera-placeholder">
+        <i class="fa-solid fa-video-slash fa-3x" style="color:#6366f1;margin-bottom:12px;"></i>
+        <p id="cam-status" style="color:#e2e8f0;font-size:0.95rem;margin-bottom:12px;">Camera permission required.</p>
+        <button class="btn btn-primary" onclick="initWebcam()">
+          <i class="fa-solid fa-camera"></i> Start Camera
+        </button>
       </div>
     </div>
 
     <!-- Thumbnails of captured frames -->
-    <div id="thumbs" class="thumb-row"></div>
+    <div id="thumbs" class="thumb-row" style="margin-top: 12px; min-height: 50px;"></div>
 
     <!-- Name input -->
-    <div class="form-group">
+    <div class="form-group" style="margin-top: 14px;">
       <label for="name-input"><i class="fa-solid fa-id-badge"></i> Full Name</label>
       <input type="text" id="name-input" placeholder="e.g. Vedant Sharma" autocomplete="off"/>
     </div>
@@ -54,9 +61,13 @@
     </div>
 
     <!-- Buttons -->
-    <div class="form-actions">
+    <div class="form-actions" style="display: flex; flex-wrap: wrap; gap: 8px;">
       <button id="btn-capture" class="btn btn-primary">
         <i class="fa-solid fa-camera"></i> Capture Photo
+      </button>
+      <input type="file" id="file-upload" accept="image/*" style="display:none;"/>
+      <button id="btn-upload" class="btn btn-secondary" onclick="document.getElementById('file-upload').click()">
+        <i class="fa-solid fa-upload"></i> Upload Image
       </button>
       <button id="btn-register" class="btn btn-success" disabled>
         <i class="fa-solid fa-user-check"></i> Register
@@ -95,6 +106,9 @@
 
 <script src="/static/js/main.js"></script>
 <script>
+  const video = document.getElementById("webcam-video");
+  const placeholder = document.getElementById("camera-placeholder");
+  const camStatus = document.getElementById("cam-status");
   const captureCount = document.getElementById("capture-count");
   const btnCapture   = document.getElementById("btn-capture");
   const btnRegister  = document.getElementById("btn-register");
@@ -102,60 +116,88 @@
   const nameInput    = document.getElementById("name-input");
   const regMessage   = document.getElementById("reg-message");
   const thumbs       = document.getElementById("thumbs");
+  const fileUpload   = document.getElementById("file-upload");
   const MAX_CAPTURES = 3;
   let captures = [];
+  let streamActive = false;
 
-  // ── Capture frame from SERVER camera (no getUserMedia conflict!) ──────────
-  btnCapture.addEventListener("click", async () => {
+  async function initWebcam() {
+    try {
+      camStatus.textContent = "Connecting to webcam…";
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+        audio: false
+      });
+      video.srcObject = stream;
+      await video.play();
+      streamActive = true;
+      placeholder.classList.add("hidden");
+    } catch (err) {
+      console.warn("Webcam error:", err);
+      camStatus.textContent = "Webcam not available. You can also use 'Upload Image' button below.";
+      placeholder.classList.remove("hidden");
+    }
+  }
+
+  // ── Capture frame directly from BROWSER camera ──────────
+  btnCapture.addEventListener("click", () => {
     if (captures.length >= MAX_CAPTURES) return;
 
-    btnCapture.disabled = true;
-    btnCapture.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Capturing…';
+    if (!streamActive || video.readyState < 2) {
+      showToast("Camera is not active. Please click 'Start Camera' or 'Upload Image'.", "error");
+      return;
+    }
 
     try {
-      const res  = await fetch("/api/capture_frame");
-      const data = await res.json();
+      const snapCanvas = document.createElement("canvas");
+      snapCanvas.width = video.videoWidth || 640;
+      snapCanvas.height = video.videoHeight || 480;
+      const ctx = snapCanvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, snapCanvas.width, snapCanvas.height);
+      const imgData = snapCanvas.toDataURL("image/jpeg", 0.9);
 
-      if (!data.success) {
-        showToast("Camera not ready. Please wait a moment.", "error");
-        btnCapture.disabled = false;
-        btnCapture.innerHTML = '<i class="fa-solid fa-camera"></i> Capture Photo';
-        return;
-      }
-
-      const imgData = data.image;
-      captures.push(imgData);
-
-      // Show thumbnail
-      const img = document.createElement("img");
-      img.src = imgData;
-      img.className = "thumb";
-      thumbs.appendChild(img);
+      addCapture(imgData);
 
       // Flash overlay
       const overlay = document.getElementById("capture-overlay");
       overlay.classList.remove("hidden");
-      setTimeout(() => overlay.classList.add("hidden"), 600);
-
-      captureCount.textContent = captures.length;
-      document.getElementById(`dot-${captures.length - 1}`).classList.add("dot-filled");
-
-      if (captures.length >= MAX_CAPTURES) {
-        btnCapture.disabled = true;
-        btnCapture.innerHTML = '<i class="fa-solid fa-camera"></i> Capture Photo';
-        btnRegister.disabled = false;
-        showToast("3 photos captured! Enter name and click Register.", "success");
-      } else {
-        btnCapture.disabled = false;
-        btnCapture.innerHTML = '<i class="fa-solid fa-camera"></i> Capture Photo';
-      }
+      setTimeout(() => overlay.classList.add("hidden"), 400);
 
     } catch (err) {
-      showToast("Error capturing frame: " + err.message, "error");
-      btnCapture.disabled = false;
-      btnCapture.innerHTML = '<i class="fa-solid fa-camera"></i> Capture Photo';
+      showToast("Error capturing photo: " + err.message, "error");
     }
   });
+
+  // Handle file upload fallback
+  fileUpload.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      addCapture(event.target.result);
+    };
+    reader.readAsDataURL(file);
+    fileUpload.value = "";
+  });
+
+  function addCapture(imgData) {
+    if (captures.length >= MAX_CAPTURES) return;
+    captures.push(imgData);
+
+    const img = document.createElement("img");
+    img.src = imgData;
+    img.className = "thumb";
+    thumbs.appendChild(img);
+
+    captureCount.textContent = captures.length;
+    document.getElementById(`dot-${captures.length - 1}`).classList.add("dot-filled");
+
+    if (captures.length >= MAX_CAPTURES) {
+      btnCapture.disabled = true;
+      btnRegister.disabled = false;
+      showToast("3 photos captured! Enter name and click Register.", "success");
+    }
+  }
 
   // Register all captures
   btnRegister.addEventListener("click", async () => {
@@ -169,19 +211,23 @@
     let lastMessage = "";
 
     for (const imgData of captures) {
-      const res = await fetch("/api/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, image: imgData })
-      });
-      const data = await res.json();
-      lastMessage = data.message;
-      if (data.success) successCount++;
+      try {
+        const res = await fetch("/api/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, image: imgData })
+        });
+        const data = await res.json();
+        lastMessage = data.message;
+        if (data.success) successCount++;
+      } catch (err) {
+        lastMessage = err.message;
+      }
     }
 
     if (successCount > 0) {
-      showReg(`✅ ${name} registered with ${successCount} photo(s)! Refreshing…`, "success");
-      setTimeout(() => location.reload(), 2000);
+      showReg(`✅ ${name} registered with ${successCount} photo(s)! Reloading…`, "success");
+      setTimeout(() => location.reload(), 1800);
     } else {
       showReg(`❌ ${lastMessage}`, "error");
       btnRegister.disabled = false;
@@ -212,7 +258,7 @@
       });
       const data = await res.json();
       showToast(data.message, data.success ? "success" : "error");
-      if (data.success) setTimeout(() => location.reload(), 1500);
+      if (data.success) setTimeout(() => location.reload(), 1200);
     });
   });
 
@@ -220,7 +266,8 @@
     regMessage.textContent = msg;
     regMessage.className = `reg-message reg-${type}`;
   }
+
+  window.addEventListener("DOMContentLoaded", initWebcam);
 </script>
 </body>
 </html>
-
