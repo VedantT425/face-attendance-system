@@ -5,11 +5,19 @@ __pycache__/
 
 # Virtual environment
 venv/
+.venv/
+env/
 
-# Database (optional — comment this out if you want to save attendance records)
-# data/attendance.db
+# Database (local only — Render uses ephemeral storage)
+data/attendance.db
+
+# Face encodings & known faces (will need re-registration on server)
+data/encodings/model.pkl
+data/known_faces/
 
 # OS files
 .DS_Store
 Thumbs.db
 
+# Environment variables
+.env

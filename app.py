@@ -3,7 +3,7 @@ app.py
 Flask Backend — Face Recognition Attendance System
 Routes:
   GET  /                  → Live camera feed page
-  GET  /video_feed        → MJPEG stream
+  GET  /video_feed        → MJPEG stream (or demo image in DEMO_MODE)
   GET  /register          → Face registration page
   POST /api/register      → Register a new face (JSON: name + base64 image)
   GET  /dashboard         → Attendance analytics dashboard
@@ -12,11 +12,13 @@ Routes:
   GET  /api/export        → CSV download
   GET  /api/registered    → JSON: list of registered people
   POST /api/delete_person → Remove a registered person
+  POST /api/mark_manual   → Manually mark a person's attendance (demo mode)
 """
 
 import base64
 import io
 import logging
+import os
 import threading
 import time
 from datetime import date
@@ -34,6 +36,10 @@ from face_engine import FaceEngine
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)s  %(message)s")
 logger = logging.getLogger(__name__)
 
+# ── Demo Mode ─────────────────────────────────────────────────────────────────
+# Set DEMO_MODE=true env var on cloud (Render). Disables webcam, enables manual marking.
+DEMO_MODE = os.environ.get("DEMO_MODE", "false").lower() == "true"
+
 # ── App init ─────────────────────────────────────────────────────────────────
 app = Flask(__name__)
 engine = FaceEngine()
@@ -41,11 +47,11 @@ attendance_mgr = AttendanceManager()
 
 # ── Camera state (shared across threads) ─────────────────────────────────────
 camera_lock = threading.Lock()
-camera: cv2.VideoCapture | None = None
-latest_frame: np.ndarray | None = None          # latest annotated frame for MJPEG
-latest_results: list = []                        # latest recognition results
+camera = None
+latest_frame = None          # latest annotated frame for MJPEG
+latest_results = []          # latest recognition results
 frame_counter = 0
-RECOGNITION_INTERVAL = 5                         # run FR every N frames for performance
+RECOGNITION_INTERVAL = 5    # run FR every N frames for performance
 
 
 def open_camera():
@@ -111,8 +117,49 @@ def camera_thread_fn():
             latest_results = cached_results
 
 
-# Start camera thread immediately
-threading.Thread(target=camera_thread_fn, daemon=True).start()
+# Start camera thread only when NOT in demo mode
+if not DEMO_MODE:
+    threading.Thread(target=camera_thread_fn, daemon=True).start()
+    logger.info("Camera thread started (live mode).")
+else:
+    logger.info("DEMO_MODE enabled — camera thread skipped.")
+
+
+# ── Demo frame generator ──────────────────────────────────────────────────────
+
+def generate_demo_frame():
+    """Yields a static 'Demo Mode' placeholder MJPEG frame."""
+    while True:
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        frame[:] = (20, 20, 40)  # dark navy background
+
+        # Draw icon area
+        cv2.rectangle(frame, (220, 120), (420, 280), (40, 40, 80), -1)
+        cv2.rectangle(frame, (220, 120), (420, 280), (80, 80, 160), 2)
+
+        # Camera icon (simplified)
+        cv2.circle(frame, (320, 195), 40, (100, 100, 200), 2)
+        cv2.circle(frame, (320, 195), 15, (100, 100, 200), -1)
+        cv2.rectangle(frame, (240, 150), (400, 250), (0, 0, 0), 0)
+
+        # Text
+        cv2.putText(frame, "DEMO MODE", (200, 320),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (100, 180, 255), 2)
+        cv2.putText(frame, "Camera not available on cloud server.", (70, 360),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (150, 150, 200), 1)
+        cv2.putText(frame, "Use Register page to add faces via photo.", (60, 390),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (150, 150, 200), 1)
+        cv2.putText(frame, "Use Dashboard to mark attendance manually.", (55, 420),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (150, 150, 200), 1)
+
+        ts = time.strftime("%Y-%m-%d  %H:%M:%S")
+        cv2.putText(frame, ts, (10, 468),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (120, 120, 120), 1)
+
+        _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+        yield (b"--frame\r\n"
+               b"Content-Type: image/jpeg\r\n\r\n" + buf.tobytes() + b"\r\n")
+        time.sleep(1)  # static frame, refresh once per second
 
 
 # ── MJPEG generator ───────────────────────────────────────────────────────────
@@ -123,7 +170,6 @@ def generate_mjpeg():
             frame = latest_frame
 
         if frame is None:
-            # Send a black placeholder while camera warms up
             placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
             cv2.putText(placeholder, "Initializing camera...", (120, 240),
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (100, 100, 100), 2)
@@ -141,6 +187,10 @@ def generate_mjpeg():
 @app.route("/api/capture_frame")
 def api_capture_frame():
     """Return the latest camera frame as base64 JPEG for registration page."""
+    if DEMO_MODE:
+        return jsonify({"success": False,
+                        "message": "Camera not available in demo mode. Please upload a photo instead."}), 503
+
     import base64 as b64mod
     with camera_lock:
         frame = latest_frame
@@ -148,7 +198,6 @@ def api_capture_frame():
     if frame is None:
         return jsonify({"success": False, "message": "Camera not ready yet."}), 503
 
-    # Return a clean frame without annotation for registration
     _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 90])
     encoded = b64mod.b64encode(buf.tobytes()).decode("utf-8")
     return jsonify({"success": True, "image": f"data:image/jpeg;base64,{encoded}"})
@@ -156,11 +205,14 @@ def api_capture_frame():
 
 @app.route("/")
 def index():
-    return render_template("index.html", today=date.today().isoformat())
+    return render_template("index.html", today=date.today().isoformat(), demo_mode=DEMO_MODE)
 
 
 @app.route("/video_feed")
 def video_feed():
+    if DEMO_MODE:
+        return Response(generate_demo_frame(),
+                        mimetype="multipart/x-mixed-replace; boundary=frame")
     return Response(generate_mjpeg(),
                     mimetype="multipart/x-mixed-replace; boundary=frame")
 
@@ -168,7 +220,8 @@ def video_feed():
 @app.route("/register")
 def register_page():
     return render_template("register.html",
-                           registered=engine.get_registered_names())
+                           registered=engine.get_registered_names(),
+                           demo_mode=DEMO_MODE)
 
 
 @app.route("/api/register", methods=["POST"])
@@ -204,6 +257,17 @@ def api_delete_person():
     return jsonify(result), (200 if result["success"] else 404)
 
 
+@app.route("/api/mark_manual", methods=["POST"])
+def api_mark_manual():
+    """Manually mark a person as present (used in demo mode)."""
+    data = request.get_json(force=True)
+    name = data.get("name", "").strip()
+    if not name:
+        return jsonify({"success": False, "message": "Name is required."}), 400
+    result = attendance_mgr.mark_attendance(name)
+    return jsonify(result), 200
+
+
 @app.route("/dashboard")
 def dashboard():
     dates = attendance_mgr.get_available_dates()
@@ -217,7 +281,8 @@ def dashboard():
                            absent=absent,
                            selected_date=selected,
                            dates=dates,
-                           registered=registered)
+                           registered=registered,
+                           demo_mode=DEMO_MODE)
 
 
 @app.route("/api/attendance")
@@ -252,7 +317,8 @@ def api_export():
 if __name__ == "__main__":
     print("\n" + "=" * 55)
     print("  Face Recognition Attendance System")
+    mode = "DEMO" if DEMO_MODE else "LIVE"
+    print(f"  Mode: {mode}")
     print("  Open: http://localhost:5000")
     print("=" * 55 + "\n")
     app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
-

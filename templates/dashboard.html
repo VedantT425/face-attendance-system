@@ -44,6 +44,33 @@
     </div>
   </div>
 
+  {% if demo_mode %}
+  <!-- ── Demo Mode: Manual Attendance Panel ── -->
+  <div style="background:#1e293b;border:1px solid #334155;border-radius:10px;padding:18px 20px;margin-bottom:20px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+      <i class="fa-solid fa-hand-pointer" style="color:#a78bfa;font-size:1.1rem;"></i>
+      <h3 style="color:#e2e8f0;font-size:1rem;margin:0;">Manual Attendance Marking <span style="background:#7c3aed;color:#fff;font-size:0.72rem;padding:2px 8px;border-radius:99px;margin-left:6px;">Demo Mode</span></h3>
+    </div>
+    {% if registered %}
+    <div style="display:flex;flex-wrap:wrap;gap:10px;" id="manual-btns">
+      {% for name in registered %}
+      <button onclick="markManual('{{ name }}')"
+        style="background:#312e81;color:#c7d2fe;border:1px solid #4338ca;border-radius:8px;padding:8px 16px;cursor:pointer;font-size:0.88rem;transition:background 0.2s;"
+        onmouseover="this.style.background='#4338ca'" onmouseout="this.style.background='#312e81'">
+        <i class="fa-solid fa-user-check"></i> {{ name }}
+      </button>
+      {% endfor %}
+    </div>
+    <p style="color:#64748b;font-size:0.8rem;margin-top:10px;margin-bottom:0;">
+      <i class="fa-solid fa-info-circle"></i> Click a name to mark them present for today. Page will refresh after marking.
+    </p>
+    {% else %}
+    <p style="color:#64748b;font-size:0.88rem;margin:0;">No registered people yet. Go to <a href="/register" style="color:#a78bfa;">Register</a> to add people first.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+
   <!-- ── Stats cards ── -->
   <div class="stats-cards">
     <div class="stat-card green">
@@ -184,7 +211,32 @@
       }
     });
   });
+
+  // ── Manual Attendance (Demo Mode) ─────────────────────
+  async function markManual(name) {
+    try {
+      const res = await fetch("/api/mark_manual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name })
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (data.already_marked) {
+          showToast(`ℹ️ ${name} already marked present today.`);
+        } else {
+          showToast(`✅ ${name} marked present!`);
+          setTimeout(() => location.reload(), 1200);
+        }
+      } else {
+        showToast(`❌ ${data.message}`);
+      }
+    } catch (err) {
+      showToast("❌ Network error.");
+    }
+  }
 </script>
 </body>
 </html>
+
 

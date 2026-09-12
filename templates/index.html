@@ -31,13 +31,29 @@
       <span><i class="fa-solid fa-circle recording-dot"></i> Live Recognition</span>
       <span id="face-count" class="badge badge-info">0 faces</span>
     </div>
+
+    {% if demo_mode %}
+    <div style="background:#1e293b;border:1px solid #334155;border-radius:8px;padding:12px 16px;margin-bottom:10px;display:flex;align-items:center;gap:10px;">
+      <i class="fa-solid fa-circle-info" style="color:#60a5fa;font-size:1.1rem;"></i>
+      <span style="color:#94a3b8;font-size:0.88rem;">
+        <strong style="color:#60a5fa;">Demo Mode:</strong>
+        Cloud server mein camera unavailable hai. Register page pe photo upload karo aur Dashboard se manually attendance mark karo.
+      </span>
+    </div>
+    {% endif %}
+
     <div class="camera-wrapper">
       <img id="camera-stream" src="/video_feed" alt="Live camera feed" />
     </div>
     <p class="camera-hint"><i class="fa-solid fa-info-circle"></i>
-      Faces are recognized automatically. Attendance is marked once per person per day.
+      {% if demo_mode %}
+        Demo mode active — register people via photo upload, then mark attendance manually from Dashboard.
+      {% else %}
+        Faces are recognized automatically. Attendance is marked once per person per day.
+      {% endif %}
     </p>
   </div>
+
 
   <!-- Right: today's attendance -->
   <div class="attendance-panel">
