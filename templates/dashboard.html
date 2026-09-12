@@ -46,25 +46,26 @@
 
   <!-- ── Quick Attendance Marking Panel ── -->
   {% if registered %}
-  <div style="background:#1e293b;border:1px solid #334155;border-radius:10px;padding:18px 20px;margin-bottom:20px;">
+  <div style="background:#0d0d10;border:1px solid #27272a;border-radius:10px;padding:18px 20px;margin-bottom:20px;">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-      <i class="fa-solid fa-hand-pointer" style="color:#a78bfa;font-size:1.1rem;"></i>
-      <h3 style="color:#e2e8f0;font-size:1rem;margin:0;">Quick Attendance Override</h3>
+      <i class="fa-solid fa-hand-pointer" style="color:#ffffff;font-size:1.1rem;"></i>
+      <h3 style="color:#ffffff;font-size:1rem;margin:0;">Quick Attendance Override</h3>
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:10px;" id="manual-btns">
       {% for name in registered %}
       <button onclick="markManual('{{ name }}')"
-        style="background:#312e81;color:#c7d2fe;border:1px solid #4338ca;border-radius:8px;padding:8px 16px;cursor:pointer;font-size:0.88rem;transition:background 0.2s;"
-        onmouseover="this.style.background='#4338ca'" onmouseout="this.style.background='#312e81'">
-        <i class="fa-solid fa-user-check"></i> {{ name }}
+        style="background:#18181b;color:#ffffff;border:1px solid #27272a;border-radius:8px;padding:8px 16px;cursor:pointer;font-size:0.88rem;transition:all 0.2s;"
+        onmouseover="this.style.background='#27272a';this.style.borderColor='#52525b'" onmouseout="this.style.background='#18181b';this.style.borderColor='#27272a'">
+        <i class="fa-solid fa-user-check" style="color:#22c55e;margin-right:4px;"></i> {{ name }}
       </button>
       {% endfor %}
     </div>
-    <p style="color:#64748b;font-size:0.8rem;margin-top:10px;margin-bottom:0;">
+    <p style="color:#a1a1aa;font-size:0.8rem;margin-top:10px;margin-bottom:0;">
       <i class="fa-solid fa-info-circle"></i> Click any registered student to quickly mark attendance.
     </p>
   </div>
   {% endif %}
+
 
 
 
@@ -192,8 +193,8 @@
         datasets: [{
           label: "Present",
           data: reversed.map(d => d.count),
-          backgroundColor: "rgba(99, 102, 241, 0.75)",
-          borderRadius: 6,
+          backgroundColor: "rgba(255, 255, 255, 0.85)",
+          borderRadius: 4,
           borderSkipped: false
         }]
       },
@@ -202,12 +203,13 @@
           legend: { display: false }
         },
         scales: {
-          x: { ticks: { color: "#94a3b8", maxRotation: 45 }, grid: { color: "#1e293b" } },
-          y: { ticks: { color: "#94a3b8", stepSize: 1 }, grid: { color: "#1e293b" }, beginAtZero: true }
+          x: { ticks: { color: "#a1a1aa", maxRotation: 45 }, grid: { color: "#27272a" } },
+          y: { ticks: { color: "#a1a1aa", stepSize: 1 }, grid: { color: "#27272a" }, beginAtZero: true }
         }
       }
     });
   });
+
 
   // ── Manual Attendance (Demo Mode) ─────────────────────
   async function markManual(name) {
