@@ -127,39 +127,35 @@ else:
 
 # ── Demo frame generator ──────────────────────────────────────────────────────
 
-def generate_demo_frame():
-    """Yields a static 'Demo Mode' placeholder MJPEG frame."""
-    while True:
-        frame = np.zeros((480, 640, 3), dtype=np.uint8)
-        frame[:] = (20, 20, 40)  # dark navy background
+def get_demo_image_bytes():
+    """Generates a static 'Demo Mode' JPEG image bytes (non-blocking)."""
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    frame[:] = (20, 20, 40)  # dark navy background
 
-        # Draw icon area
-        cv2.rectangle(frame, (220, 120), (420, 280), (40, 40, 80), -1)
-        cv2.rectangle(frame, (220, 120), (420, 280), (80, 80, 160), 2)
+    # Draw icon area
+    cv2.rectangle(frame, (220, 120), (420, 280), (40, 40, 80), -1)
+    cv2.rectangle(frame, (220, 120), (420, 280), (80, 80, 160), 2)
 
-        # Camera icon (simplified)
-        cv2.circle(frame, (320, 195), 40, (100, 100, 200), 2)
-        cv2.circle(frame, (320, 195), 15, (100, 100, 200), -1)
-        cv2.rectangle(frame, (240, 150), (400, 250), (0, 0, 0), 0)
+    # Camera icon (simplified)
+    cv2.circle(frame, (320, 195), 40, (100, 100, 200), 2)
+    cv2.circle(frame, (320, 195), 15, (100, 100, 200), -1)
 
-        # Text
-        cv2.putText(frame, "DEMO MODE", (200, 320),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (100, 180, 255), 2)
-        cv2.putText(frame, "Camera not available on cloud server.", (70, 360),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (150, 150, 200), 1)
-        cv2.putText(frame, "Use Register page to add faces via photo.", (60, 390),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (150, 150, 200), 1)
-        cv2.putText(frame, "Use Dashboard to mark attendance manually.", (55, 420),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (150, 150, 200), 1)
+    # Text
+    cv2.putText(frame, "DEMO MODE", (200, 320),
+                cv2.FONT_HERSHEY_SIMPLEX, 1.0, (100, 180, 255), 2)
+    cv2.putText(frame, "Camera not available on cloud server.", (70, 360),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (150, 150, 200), 1)
+    cv2.putText(frame, "Use Register page to add faces via photo.", (60, 390),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (150, 150, 200), 1)
+    cv2.putText(frame, "Use Dashboard to mark attendance manually.", (55, 420),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (150, 150, 200), 1)
 
-        ts = time.strftime("%Y-%m-%d  %H:%M:%S")
-        cv2.putText(frame, ts, (10, 468),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (120, 120, 120), 1)
+    ts = time.strftime("%Y-%m-%d  %H:%M:%S")
+    cv2.putText(frame, ts, (10, 468),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (120, 120, 120), 1)
 
-        _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
-        yield (b"--frame\r\n"
-               b"Content-Type: image/jpeg\r\n\r\n" + buf.tobytes() + b"\r\n")
-        time.sleep(1)  # static frame, refresh once per second
+    _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    return buf.tobytes()
 
 
 # ── MJPEG generator ───────────────────────────────────────────────────────────
@@ -211,10 +207,10 @@ def index():
 @app.route("/video_feed")
 def video_feed():
     if DEMO_MODE:
-        return Response(generate_demo_frame(),
-                        mimetype="multipart/x-mixed-replace; boundary=frame")
+        return Response(get_demo_image_bytes(), mimetype="image/jpeg")
     return Response(generate_mjpeg(),
                     mimetype="multipart/x-mixed-replace; boundary=frame")
+
 
 
 @app.route("/register")
