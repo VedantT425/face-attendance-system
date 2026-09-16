@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Login — Vedant FC Attendance</title>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+</head>
+<body style="display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 1.5rem;">
+
+  <div class="login-card" style="width: 100%; max-width: 420px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 2.2rem; box-shadow: var(--shadow);">
+    
+    <div style="text-align: center; margin-bottom: 2rem;">
+      <div style="display: inline-flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 50%; background: var(--surface2); border: 1px solid var(--border); margin-bottom: 1rem;">
+        <i class="fa-solid fa-shield-halved fa-2x" style="color: #ffffff;"></i>
+      </div>
+      <h2 style="font-size: 1.4rem; font-weight: 700; color: #ffffff; letter-spacing: -0.02em;">Admin Portal</h2>
+      <p style="color: var(--muted); font-size: 0.88rem; margin-top: 0.3rem;">Enter faculty/admin credentials to access management controls</p>
+    </div>
+
+    {% if error %}
+    <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: var(--red); padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.88rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
+      <i class="fa-solid fa-circle-exclamation"></i>
+      <span>{{ error }}</span>
+    </div>
+    {% endif %}
+
+    <form method="POST" action="/login?next={{ request.args.get('next', '') }}">
+      
+      <div class="form-group" style="margin-bottom: 1.25rem;">
+        <label for="username" style="display: block; font-size: 0.8rem; font-weight: 600; color: var(--muted); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.05em;">
+          <i class="fa-solid fa-user"></i> Username
+        </label>
+        <input type="text" id="username" name="username" placeholder="admin" required autocomplete="off"
+               style="width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: #ffffff; padding: 0.75rem 1rem; font-size: 0.95rem; outline: none; transition: all 0.2s;"/>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 1.75rem;">
+        <label for="password" style="display: block; font-size: 0.8rem; font-weight: 600; color: var(--muted); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.05em;">
+          <i class="fa-solid fa-lock"></i> Password
+        </label>
+        <input type="password" id="password" name="password" placeholder="••••••••" required
+               style="width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: #ffffff; padding: 0.75rem 1rem; font-size: 0.95rem; outline: none; transition: all 0.2s;"/>
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 0.8rem; font-size: 0.95rem;">
+        <i class="fa-solid fa-arrow-right-to-bracket"></i> Sign In to Dashboard
+      </button>
+
+    </form>
+
+    <div style="margin-top: 1.5rem; text-align: center; border-top: 1px solid var(--border); padding-top: 1.25rem;">
+      <a href="/" style="color: var(--muted); font-size: 0.88rem; display: inline-flex; align-items: center; gap: 0.4rem; transition: color 0.2s;" onmouseover="this.style.color='#ffffff'" onmouseout="this.style.color='var(--muted)'">
+        <i class="fa-solid fa-arrow-left"></i> Return to Live Kiosk
+      </a>
+    </div>
+
+  </div>
+
+</body>
+</html>

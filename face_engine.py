@@ -24,8 +24,9 @@ logger = logging.getLogger(__name__)
 ENCODINGS_PATH = os.path.join(os.path.dirname(__file__), "data", "encodings", "model.pkl")
 KNOWN_FACES_DIR = os.path.join(os.path.dirname(__file__), "data", "known_faces")
 
-# Haar cascade XML — bundled locally since OpenCV 5 no longer ships these
+# Haar cascade XMLs — bundled locally
 CASCADE_PATH = os.path.join(os.path.dirname(__file__), "data", "haarcascade_frontalface_default.xml")
+EYE_CASCADE_PATH = os.path.join(os.path.dirname(__file__), "data", "haarcascade_eye.xml")
 
 # LBPH confidence threshold — LOWER is more similar in LBPH
 # Faces with confidence > THRESHOLD are labelled "Unknown"
@@ -43,14 +44,16 @@ class FaceEngine:
         self.train_faces: list[np.ndarray] = []   # grayscale face images
         self.train_labels: list[int] = []          # corresponding int labels
 
-        # OpenCV face recognizer and detector
+        # OpenCV face recognizer and detectors
         self.recognizer = cv2.face.LBPHFaceRecognizer_create(
             radius=1, neighbors=8, grid_x=8, grid_y=8
         )
         self.detector = cv2.CascadeClassifier(CASCADE_PATH)
+        self.eye_detector = cv2.CascadeClassifier(EYE_CASCADE_PATH)
         self._trained = False
 
         self._load_model()
+
 
     # ─────────────────────────────────────────────
     # Persistence
@@ -197,11 +200,12 @@ class FaceEngine:
     # Recognition
     # ─────────────────────────────────────────────
 
-    def process_frame(self, frame_bgr: np.ndarray) -> tuple[np.ndarray, list]:
+    def process_frame(self, frame_bgr: np.ndarray) -> tuple[np.ndarray, list, dict]:
         """
         Detect and recognize all faces in a BGR frame.
-        Returns (annotated_frame, results).
-        Result: {"name": str, "confidence": float, "box": (x,y,w,h)}
+        Returns (annotated_frame, results, meta).
+        Result: {"name": str, "confidence": float, "box": (x,y,w,h), "status": "known"|"low_confidence"|"unknown", "has_eyes": bool}
+        Meta: {"multiple_faces": bool, "face_count": int}
         """
         gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
         gray_eq = cv2.equalizeHist(gray)
@@ -214,37 +218,68 @@ class FaceEngine:
             flags=cv2.CASCADE_SCALE_IMAGE
         )
 
+        multiple_faces = len(faces) > 1
         results = []
+
         for (x, y, w, h) in faces:
             face_roi = cv2.resize(gray[y:y+h, x:x+w], (100, 100))
+            face_gray_orig = gray[y:y+h, x:x+w]
+
+            # Eye detection inside face for basic liveness / anti-spoof check
+            eyes = self.eye_detector.detectMultiScale(
+                face_gray_orig,
+                scaleFactor=1.1,
+                minNeighbors=3,
+                minSize=(15, 15)
+            )
+            has_eyes = len(eyes) > 0
 
             name = "Unknown"
+            status = "unknown"
             display_conf = 0.0
 
             if self._trained:
                 label_id, lbph_dist = self.recognizer.predict(face_roi)
-                # LBPH dist: 0 = perfect, 100+ = poor match
-                # Convert to a 0–100 confidence score (higher = better)
                 confidence = max(0.0, 100.0 - lbph_dist)
                 display_conf = round(confidence, 1)
 
                 if lbph_dist < CONFIDENCE_THRESHOLD:
                     name = self.id_to_name.get(label_id, "Unknown")
+                    status = "known" if name != "Unknown" else "unknown"
+                elif lbph_dist < (CONFIDENCE_THRESHOLD + 18):
+                    name = self.id_to_name.get(label_id, "Unknown")
+                    status = "low_confidence" if name != "Unknown" else "unknown"
+                else:
+                    status = "unknown"
 
             results.append({
                 "name": name,
                 "confidence": display_conf,
-                "box": (x, y, w, h)
+                "box": (int(x), int(y), int(w), int(h)),
+                "status": status,
+                "has_eyes": has_eyes
             })
 
-            # ── Draw annotation ──
-            color = (0, 200, 100) if name != "Unknown" else (0, 60, 220)
-            cv2.rectangle(frame_bgr, (x, y), (x + w, y + h), color, 2)
+            # Draw on frame_bgr
+            if multiple_faces:
+                color = (0, 0, 230)  # Red warning for multiple faces
+            elif status == "known":
+                color = (0, 200, 100)  # Green
+            elif status == "low_confidence":
+                color = (0, 215, 255)  # Amber / Yellow
+            else:
+                color = (0, 60, 220)  # Red/Unknown
 
-            label = f"{name}  {display_conf:.1f}%" if name != "Unknown" else "Unknown"
+            cv2.rectangle(frame_bgr, (x, y), (x + w, y + h), color, 2)
+            label = f"{name} {display_conf:.0f}%" if status != "unknown" else "Unknown"
             (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 1)
             cv2.rectangle(frame_bgr, (x, y - th - 10), (x + tw + 8, y), color, -1)
             cv2.putText(frame_bgr, label, (x + 4, y - 4),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1)
 
-        return frame_bgr, results
+        meta = {
+            "multiple_faces": multiple_faces,
+            "face_count": len(faces)
+        }
+        return frame_bgr, results, meta
+
