@@ -306,10 +306,22 @@
       listCameras();
     } catch (err) {
       console.error("Camera access error:", err);
-      statusText.textContent = "Camera access denied or unavailable. Click button below to allow permission.";
       placeholder.classList.remove("hidden");
-      showToast("Please allow camera access in your browser settings", "error");
+      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+        statusText.innerHTML = "<strong style='color:#ef4444;'>Camera permission is blocked!</strong><br/><span style='font-size:0.82rem;color:var(--muted);display:block;margin-top:4px;'>Click the 🔒 lock icon (or camera icon) on the left side of your browser URL bar, set Camera to <strong>'Allow'</strong>, then refresh.</span>";
+        showToast("Camera blocked: Click lock icon in browser address bar to allow", "error");
+      } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
+        statusText.innerHTML = "<strong style='color:#eab308;'>Camera is in use by another app!</strong><br/><span style='font-size:0.82rem;color:var(--muted);display:block;margin-top:4px;'>Close Zoom, Teams, or any other camera apps, then click Retry.</span>";
+        showToast("Camera hardware is busy/in use", "error");
+      } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+        statusText.innerHTML = "<strong style='color:#ef4444;'>No camera hardware found!</strong><br/><span style='font-size:0.82rem;color:var(--muted);display:block;margin-top:4px;'>Please plug in a USB webcam or turn on your laptop camera.</span>";
+        showToast("No camera hardware detected", "error");
+      } else {
+        statusText.textContent = "Camera error: " + (err.message || err.name);
+        showToast("Camera error: " + (err.message || err.name), "error");
+      }
     }
+
   }
 
   cameraSelect.addEventListener("change", () => {

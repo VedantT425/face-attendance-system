@@ -135,11 +135,11 @@ def camera_thread_fn():
             latest_results = cached_results
 
 
-if not DEMO_MODE:
-    threading.Thread(target=camera_thread_fn, daemon=True).start()
-    logger.info("Camera thread started (live mode).")
-else:
-    logger.info("DEMO_MODE enabled — camera thread skipped.")
+# Do not start server-side cv2.VideoCapture loop because the browser uses HTML5
+# getUserMedia to capture frames directly. Keeping this disabled prevents Windows
+# hardware camera lock conflicts between Python and Chrome.
+logger.info("Server running in browser-webcam mode (hardware lock released for browser).")
+
 
 
 def get_demo_image_bytes():

@@ -139,9 +139,16 @@
       placeholder.classList.add("hidden");
     } catch (err) {
       console.warn("Webcam error:", err);
-      camStatus.textContent = "Webcam not available. You can also use 'Upload Image' button below.";
       placeholder.classList.remove("hidden");
+      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+        camStatus.innerHTML = "<strong style='color:#ef4444;'>Camera blocked in browser!</strong><br/><span style='font-size:0.8rem;color:var(--muted);'>Click the 🔒 icon in the URL bar and select 'Allow' for Camera.</span>";
+      } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
+        camStatus.innerHTML = "<strong style='color:#eab308;'>Camera is in use by another app!</strong><br/><span style='font-size:0.8rem;color:var(--muted);'>Close other apps using camera or use 'Upload Image' below.</span>";
+      } else {
+        camStatus.textContent = "Webcam unavailable. You can use 'Upload Image' below.";
+      }
     }
+
   }
 
   // ── Capture frame directly from BROWSER camera ──────────
