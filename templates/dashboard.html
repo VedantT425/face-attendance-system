@@ -1,361 +1,415 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Vedant FC Attendance — Admin Dashboard</title>
-  <link rel="stylesheet" href="/static/css/style.css"/>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 </head>
+
 <body>
 
-<nav class="navbar">
-  <div class="brand">
-    <i class="fa-solid fa-eye"></i>
-    <span>Vedant FC Attendance</span>
-    <span class="badge badge-info" style="font-size: 0.72rem; margin-left: 0.3rem;">ADMIN</span>
-  </div>
-  <div class="nav-links">
-    <a href="/"><i class="fa-solid fa-video"></i> Live</a>
-    <a href="/register"><i class="fa-solid fa-user-plus"></i> Register</a>
-    <a href="/dashboard" class="active"><i class="fa-solid fa-chart-bar"></i> Dashboard</a>
-    <a href="/logout" style="color: var(--red); border-color: rgba(239, 68, 68, 0.3);"><i class="fa-solid fa-arrow-right-from-bracket"></i> Logout</a>
-  </div>
-</nav>
-
-<div class="page-dashboard">
-
-  <!-- ── Header row with Date Select & Range Filter ── -->
-  <div class="dash-header">
-    <div>
-      <h1 class="dash-title"><i class="fa-solid fa-chart-pie"></i> Analytics & Attendance Log</h1>
-      <p style="color: var(--muted); font-size: 0.85rem; margin-top: 0.2rem;">
-        Track daily student activity, check-in/out timestamps, and attendance defaulters.
-      </p>
+  <nav class="navbar">
+    <div class="brand">
+      <i class="fa-solid fa-eye"></i>
+      <span>Vedant FC Attendance</span>
+      <span class="badge badge-info" style="font-size: 0.72rem; margin-left: 0.3rem;">ADMIN</span>
     </div>
+    <div class="nav-links">
+      <a href="/"><i class="fa-solid fa-video"></i> Attendance</a>
+      <a href="/register"><i class="fa-solid fa-user-plus"></i> Register</a>
+      <a href="/dashboard" class="active"><i class="fa-solid fa-chart-bar"></i> Dashboard</a>
+      <a href="/logout" style="color: var(--red); border-color: rgba(239, 68, 68, 0.3);"><i
+          class="fa-solid fa-arrow-right-from-bracket"></i> Logout</a>
+    </div>
+  </nav>
 
-    <div class="dash-controls">
-      <!-- Date Picker Form -->
-      <form method="GET" action="/dashboard" class="date-form" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-        
-        <!-- Single Date Select -->
-        <select name="date" onchange="this.form.submit()" class="date-select" title="Select specific date">
-          {% for d in dates %}
-            <option value="{{ d }}" {% if d == selected_date and not start_date %}selected{% endif %}>{{ d }}</option>
-          {% endfor %}
-          {% if not dates %}
+  <div class="page-dashboard">
+    <div class="ambient-orb orb-one"></div>
+    <div class="ambient-orb orb-two"></div>
+
+    <!-- ── Header row with Date Select & Range Filter ── -->
+    <div class="dash-header">
+      <div>
+        <h1 class="dash-title"><i class="fa-solid fa-chart-pie"></i> Analytics & Attendance Log</h1>
+        <p style="color: var(--muted); font-size: 0.85rem; margin-top: 0.2rem;">
+          Track daily activity, celebrate consistency, and manage student attendance.
+        </p>
+      </div>
+
+      <div class="dash-controls">
+        <!-- Date Picker Form -->
+        <form method="GET" action="/dashboard" class="date-form"
+          style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+
+          <!-- Single Date Select -->
+          <select name="date" onchange="this.form.submit()" class="date-select" title="Select specific date">
+            {% for d in dates %}
+            <option value="{{ d }}" {% if d==selected_date and not start_date %}selected{% endif %}>{{ d }}</option>
+            {% endfor %}
+            {% if not dates %}
             <option value="{{ selected_date }}">{{ selected_date }}</option>
-          {% endif %}
-        </select>
+            {% endif %}
+          </select>
 
-        <!-- Date Range Filter toggle -->
-        <input type="date" name="start_date" value="{{ start_date }}" class="date-select" style="padding: 0.45rem 0.6rem;" title="Start Date"/>
-        <span style="color: var(--muted); font-size: 0.8rem;">to</span>
-        <input type="date" name="end_date" value="{{ end_date }}" class="date-select" style="padding: 0.45rem 0.6rem;" title="End Date"/>
-        
-        <button type="submit" class="btn btn-secondary" style="padding: 0.5rem 0.85rem;">
-          <i class="fa-solid fa-filter"></i> Filter
+          <!-- Date Range Filter toggle -->
+          <input type="date" name="start_date" value="{{ start_date }}" class="date-select"
+            style="padding: 0.45rem 0.6rem;" title="Start Date" />
+          <span style="color: var(--muted); font-size: 0.8rem;">to</span>
+          <input type="date" name="end_date" value="{{ end_date }}" class="date-select" style="padding: 0.45rem 0.6rem;"
+            title="End Date" />
+
+          <button type="submit" class="btn btn-secondary" style="padding: 0.5rem 0.85rem;">
+            <i class="fa-solid fa-filter"></i> Filter
+          </button>
+        </form>
+
+        <!-- Export CSV -->
+        <a href="/api/export{% if start_date and end_date %}?start_date={{ start_date }}&end_date={{ end_date }}{% elif selected_date %}?date={{ selected_date }}{% endif %}"
+          class="btn btn-primary">
+          <i class="fa-solid fa-download"></i> Export CSV
+        </a>
+      </div>
+    </div>
+
+    <!-- ── Quick Attendance Manual Override ── -->
+    {% if registered %}
+    <div class="manual-override-card"
+      style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem 1.5rem; box-shadow: var(--shadow);">
+      <div
+        style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.6rem;">
+          <i class="fa-solid fa-hand-pointer" style="color: #ffffff; font-size: 1.1rem;"></i>
+          <h3 style="color: #ffffff; font-size: 0.95rem; margin: 0; font-weight: 600;">Manual Attendance Override
+            (Check-In / Out)</h3>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <span style="font-size: 0.75rem; color: var(--muted);">Punch Mode:</span>
+          <button id="btn-mode-in" class="btn btn-primary" style="padding: 0.25rem 0.65rem; font-size: 0.75rem;"
+            onclick="setManualPunchMode('in')">Check In</button>
+          <button id="btn-mode-out" class="btn btn-secondary" style="padding: 0.25rem 0.65rem; font-size: 0.75rem;"
+            onclick="setManualPunchMode('out')">Check Out</button>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 8px;" id="manual-btns">
+        {% for name in registered %}
+        <button onclick="triggerManualPunch('{{ name }}')"
+          style="background: var(--surface2); color: #ffffff; border: 1px solid var(--border); border-radius: 8px; padding: 0.45rem 0.9rem; cursor: pointer; font-size: 0.85rem; transition: all 0.2s;"
+          onmouseover="this.style.background='var(--surface3)';this.style.borderColor='var(--border-focus)'"
+          onmouseout="this.style.background='var(--surface2)';this.style.borderColor='var(--border)'">
+          <i class="fa-solid fa-user-check" style="color: var(--green); margin-right: 4px;"></i> {{ name }}
         </button>
-      </form>
-
-      <!-- Export CSV -->
-      <a href="/api/export{% if start_date and end_date %}?start_date={{ start_date }}&end_date={{ end_date }}{% elif selected_date %}?date={{ selected_date }}{% endif %}" class="btn btn-primary">
-        <i class="fa-solid fa-download"></i> Export CSV
-      </a>
-    </div>
-  </div>
-
-  <!-- ── Quick Attendance Manual Override ── -->
-  {% if registered %}
-  <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem 1.5rem; box-shadow: var(--shadow);">
-    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
-      <div style="display: flex; align-items: center; gap: 0.6rem;">
-        <i class="fa-solid fa-hand-pointer" style="color: #ffffff; font-size: 1.1rem;"></i>
-        <h3 style="color: #ffffff; font-size: 0.95rem; margin: 0; font-weight: 600;">Manual Attendance Override (Check-In / Out)</h3>
-      </div>
-      <div style="display: flex; align-items: center; gap: 0.5rem;">
-        <span style="font-size: 0.75rem; color: var(--muted);">Punch Mode:</span>
-        <button id="btn-mode-in" class="btn btn-primary" style="padding: 0.25rem 0.65rem; font-size: 0.75rem;" onclick="setManualPunchMode('in')">Check In</button>
-        <button id="btn-mode-out" class="btn btn-secondary" style="padding: 0.25rem 0.65rem; font-size: 0.75rem;" onclick="setManualPunchMode('out')">Check Out</button>
+        {% endfor %}
       </div>
     </div>
-    
-    <div style="display: flex; flex-wrap: wrap; gap: 8px;" id="manual-btns">
-      {% for name in registered %}
-      <button onclick="triggerManualPunch('{{ name }}')"
-        style="background: var(--surface2); color: #ffffff; border: 1px solid var(--border); border-radius: 8px; padding: 0.45rem 0.9rem; cursor: pointer; font-size: 0.85rem; transition: all 0.2s;"
-        onmouseover="this.style.background='var(--surface3)';this.style.borderColor='var(--border-focus)'" onmouseout="this.style.background='var(--surface2)';this.style.borderColor='var(--border)'">
-        <i class="fa-solid fa-user-check" style="color: var(--green); margin-right: 4px;"></i> {{ name }}
+    {% endif %}
+
+    {% if pending_requests %}
+    <div class="table-card pending-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+        <div>
+          <h3 class="table-title"><i class="fa-solid fa-user-clock"></i> Pending Student Registrations</h3>
+          <p style="color:var(--muted);font-size:0.82rem;">Approve a request to activate face recognition for attendance.</p>
+        </div>
+        <span class="badge pending-count">{{ pending_requests|length }} pending</span>
+      </div>
+      <table class="att-table" style="margin-top:1rem;">
+        <thead><tr><th>Student</th><th>Submitted</th><th>Action</th></tr></thead>
+        <tbody>
+          {% for request in pending_requests %}
+          <tr id="request-{{ request.id }}">
+            <td><span class="att-avatar mini">{{ request.name[0].upper() }}</span> {{ request.name }}</td>
+            <td>{{ request.created_at }}</td>
+            <td style="display:flex;gap:.4rem;">
+              <button class="btn btn-success" style="padding:.35rem .65rem;font-size:.78rem;" onclick="reviewRegistration({{ request.id }}, 'approved')"><i class="fa-solid fa-check"></i> Approve</button>
+              <button class="btn btn-secondary" style="padding:.35rem .65rem;font-size:.78rem;" onclick="reviewRegistration({{ request.id }}, 'rejected')"><i class="fa-solid fa-xmark"></i> Reject</button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    <!-- ── Stats cards ── -->
+    <div class="stats-cards">
+      <div class="stat-card green tilt-card">
+        <i class="fa-solid fa-user-check stat-icon"></i>
+        <div class="stat-val">{{ records | length }}</div>
+        <div class="stat-lab">Present Records</div>
+      </div>
+
+      <div class="stat-card red tilt-card">
+        <i class="fa-solid fa-user-xmark stat-icon"></i>
+        <div class="stat-val">{{ absent | length }}</div>
+        <div class="stat-lab">Absent ({{ selected_date }})</div>
+      </div>
+
+      <div class="stat-card blue tilt-card">
+        <i class="fa-solid fa-users stat-icon"></i>
+        <div class="stat-val">{{ registered | length }}</div>
+        <div class="stat-lab">Total Enrolled</div>
+      </div>
+
+      <!-- Champions Card -->
+      <div class="stat-card purple champion-stat tilt-card">
+        <i class="fa-solid fa-trophy stat-icon"></i>
+        <div class="stat-val">{{ champions | length }}</div>
+        <div class="stat-lab">Attendance Champions</div>
+      </div>
+    </div>
+
+    <!-- ── Charts row ── -->
+    <div class="charts-row">
+      <div class="chart-card tilt-card">
+        <h3 class="chart-title">Daily Ratio — Present vs Absent</h3>
+        <canvas id="pieChart" height="220"></canvas>
+      </div>
+    </div>
+
+    <!-- ── View Tabs: [Attendance Log] vs [Attendance Champions] ── -->
+    <div style="display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.2rem;">
+      <button id="tab-btn-log" class="btn btn-primary" onclick="switchTab('log')"
+        style="padding: 0.5rem 1.1rem; font-size: 0.88rem;">
+        <i class="fa-solid fa-list-check"></i> Attendance Records ({{ records | length }})
       </button>
-      {% endfor %}
-    </div>
-  </div>
-  {% endif %}
-
-  <!-- ── Stats cards ── -->
-  <div class="stats-cards">
-    <div class="stat-card green">
-      <i class="fa-solid fa-user-check stat-icon"></i>
-      <div class="stat-val">{{ records | length }}</div>
-      <div class="stat-lab">Present Records</div>
+      <button id="tab-btn-defaulters" class="btn btn-secondary" onclick="switchTab('defaulters')"
+        style="padding: 0.5rem 1.1rem; font-size: 0.88rem;">
+        <i class="fa-solid fa-trophy"></i> Attendance Champions
+        <span class="badge champion-count">{{ champions | length }}</span>
+      </button>
     </div>
 
-    <div class="stat-card red">
-      <i class="fa-solid fa-user-xmark stat-icon"></i>
-      <div class="stat-val">{{ absent | length }}</div>
-      <div class="stat-lab">Absent ({{ selected_date }})</div>
+    <!-- ── Tab 1: Attendance Log & Absent Lists ── -->
+    <div id="tab-content-log" class="tables-row">
+
+      <!-- Present Records with In / Out / Duration -->
+      <div class="table-card">
+        <h3 class="table-title"><i class="fa-solid fa-check-circle text-green"></i> Present Log — {{ start_date and
+          end_date and (start_date ~ " to " ~ end_date) or selected_date }}</h3>
+        {% if records %}
+        <table class="att-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Name</th>
+              <th>Check-In</th>
+              <th>Check-Out</th>
+              <th>Duration</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in records %}
+            <tr>
+              <td>{{ loop.index }}</td>
+              <td><span class="att-avatar mini">{{ r.name[0].upper() }}</span> {{ r.name }}</td>
+              <td><i class="fa-solid fa-arrow-right-to-bracket text-green"></i> {{ r.check_in }}</td>
+              <td>
+                {% if r.check_out and r.check_out != "--" %}
+                <i class="fa-solid fa-arrow-right-from-bracket" style="color: #a1a1aa;"></i> {{ r.check_out }}
+                {% else %}
+                <span style="color: var(--muted);">--</span>
+                {% endif %}
+              </td>
+              <td>
+                <span class="badge"
+                  style="background: var(--surface2); color: #ffffff; border: 1px solid var(--border);">
+                  {{ r.duration }}
+                </span>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="att-empty">No attendance records found for this period.</p>
+        {% endif %}
+      </div>
+
+      <!-- Absent List -->
+      <div class="table-card">
+        <h3 class="table-title"><i class="fa-solid fa-circle-xmark text-red"></i> Not Logged In ({{ selected_date }})
+        </h3>
+        {% if absent %}
+        <table class="att-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Student / Member</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for name in absent %}
+            <tr>
+              <td>{{ loop.index }}</td>
+              <td><span class="att-avatar mini absent-avatar">{{ name[0].upper() }}</span> {{ name }}</td>
+              <td><span class="badge badge-red">Absent</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="att-empty">All registered students are present! 🎉</p>
+        {% endif %}
+      </div>
+
     </div>
 
-    <div class="stat-card blue">
-      <i class="fa-solid fa-users stat-icon"></i>
-      <div class="stat-val">{{ registered | length }}</div>
-      <div class="stat-lab">Total Enrolled</div>
-    </div>
+    <!-- ── Tab 2: Attendance Champions ── -->
+    <div id="tab-content-defaulters" class="table-card champions-panel hidden" style="width: 100%;">
+      <div
+        style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.5rem;">
+        <div>
+          <h3 class="table-title champion-title" style="margin: 0;">
+            <i class="fa-solid fa-trophy"></i> Attendance Champions
+          </h3>
+          <p style="color: var(--muted); font-size: 0.85rem; margin-top: 0.2rem;">
+            Celebrating the students with the strongest attendance and best consistency.
+          </p>
+        </div>
+      </div>
 
-    <!-- Defaulters Card -->
-    {% set defaulter_count = namespace(count=0) %}
-    {% for d in defaulters %}
-      {% if d.is_defaulter %}{% set defaulter_count.count = defaulter_count.count + 1 %}{% endif %}
-    {% endfor %}
-    <div class="stat-card purple" style="border-left: 3px solid #f43f5e;">
-      <i class="fa-solid fa-triangle-exclamation stat-icon" style="color: #f43f5e;"></i>
-      <div class="stat-val" style="color: #f43f5e;">{{ defaulter_count.count }}</div>
-      <div class="stat-lab">Defaulters (&lt; 75%)</div>
-    </div>
-  </div>
-
-  <!-- ── Charts row ── -->
-  <div class="charts-row">
-    <div class="chart-card">
-      <h3 class="chart-title">Daily Ratio — Present vs Absent</h3>
-      <canvas id="pieChart" height="220"></canvas>
-    </div>
-    <div class="chart-card chart-card-wide">
-      <h3 class="chart-title">Attendance Volume Trend (Last 30 days)</h3>
-      <canvas id="barChart" height="220"></canvas>
-    </div>
-  </div>
-
-  <!-- ── View Tabs: [Attendance Log] vs [Defaulter Analysis (<75%)] ── -->
-  <div style="display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.2rem;">
-    <button id="tab-btn-log" class="btn btn-primary" onclick="switchTab('log')" style="padding: 0.5rem 1.1rem; font-size: 0.88rem;">
-      <i class="fa-solid fa-list-check"></i> Attendance Records ({{ records | length }})
-    </button>
-    <button id="tab-btn-defaulters" class="btn btn-secondary" onclick="switchTab('defaulters')" style="padding: 0.5rem 1.1rem; font-size: 0.88rem;">
-      <i class="fa-solid fa-user-slash" style="color: #f43f5e;"></i> Defaulters List (&lt; 75% Attendance)
-      <span class="badge badge-red" style="margin-left: 0.4rem;">{{ defaulter_count.count }}</span>
-    </button>
-  </div>
-
-  <!-- ── Tab 1: Attendance Log & Absent Lists ── -->
-  <div id="tab-content-log" class="tables-row">
-
-    <!-- Present Records with In / Out / Duration -->
-    <div class="table-card">
-      <h3 class="table-title"><i class="fa-solid fa-check-circle text-green"></i> Present Log — {{ start_date and end_date and (start_date ~ " to " ~ end_date) or selected_date }}</h3>
-      {% if records %}
+      {% if champions %}
       <table class="att-table">
         <thead>
           <tr>
-            <th>#</th>
-            <th>Name</th>
-            <th>Check-In</th>
-            <th>Check-Out</th>
-            <th>Duration</th>
+            <th>Rank</th>
+            <th>Student Name</th>
+            <th>Days Attended</th>
+            <th>Total Sessions</th>
+            <th>Attendance Rate</th>
+            <th>Current Streak</th>
           </tr>
         </thead>
         <tbody>
-          {% for r in records %}
+          {% for d in champions %}
           <tr>
             <td>{{ loop.index }}</td>
-            <td><span class="att-avatar mini">{{ r.name[0].upper() }}</span> {{ r.name }}</td>
-            <td><i class="fa-solid fa-arrow-right-to-bracket text-green"></i> {{ r.check_in }}</td>
+            <td><span class="att-avatar mini">{{ d.name[0].upper() }}</span> {{ d.name }}</td>
+            <td>{{ d.attended_days }}</td>
+            <td>{{ d.total_days }}</td>
             <td>
-              {% if r.check_out and r.check_out != "--" %}
-                <i class="fa-solid fa-arrow-right-from-bracket" style="color: #eab308;"></i> {{ r.check_out }}
-              {% else %}
-                <span style="color: var(--muted);">--</span>
-              {% endif %}
-            </td>
-            <td>
-              <span class="badge" style="background: var(--surface2); color: #ffffff; border: 1px solid var(--border);">
-                {{ r.duration }}
-              </span>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% else %}
-        <p class="att-empty">No attendance records found for this period.</p>
-      {% endif %}
-    </div>
-
-    <!-- Absent List -->
-    <div class="table-card">
-      <h3 class="table-title"><i class="fa-solid fa-circle-xmark text-red"></i> Not Logged In ({{ selected_date }})</h3>
-      {% if absent %}
-      <table class="att-table">
-        <thead><tr><th>#</th><th>Student / Member</th><th>Status</th></tr></thead>
-        <tbody>
-          {% for name in absent %}
-          <tr>
-            <td>{{ loop.index }}</td>
-            <td><span class="att-avatar mini absent-avatar">{{ name[0].upper() }}</span> {{ name }}</td>
-            <td><span class="badge badge-red">Absent</span></td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% else %}
-        <p class="att-empty">All registered students are present! 🎉</p>
-      {% endif %}
-    </div>
-
-  </div>
-
-  <!-- ── Tab 2: Defaulters Analysis (< 75%) ── -->
-  <div id="tab-content-defaulters" class="table-card hidden" style="width: 100%;">
-    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.5rem;">
-      <div>
-        <h3 class="table-title" style="margin: 0; color: #f43f5e;">
-          <i class="fa-solid fa-triangle-exclamation"></i> Low Attendance Defaulter List (Below 75%)
-        </h3>
-        <p style="color: var(--muted); font-size: 0.85rem; margin-top: 0.2rem;">
-          Based on all {{ defaulters[0].total_days if defaulters else 1 }} recorded working sessions.
-        </p>
-      </div>
-      <button class="btn btn-secondary" onclick="exportDefaultersCSV()">
-        <i class="fa-solid fa-file-csv"></i> Export Defaulters
-      </button>
-    </div>
-
-    {% if defaulters %}
-    <table class="att-table">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Student Name</th>
-          <th>Days Attended</th>
-          <th>Total Sessions</th>
-          <th>Attendance Rate</th>
-          <th>Eligibility Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for d in defaulters %}
-        <tr style="{% if d.is_defaulter %}background: rgba(239, 68, 68, 0.04);{% endif %}">
-          <td>{{ loop.index }}</td>
-          <td><span class="att-avatar mini {% if d.is_defaulter %}absent-avatar{% endif %}">{{ d.name[0].upper() }}</span> {{ d.name }}</td>
-          <td>{{ d.attended_days }}</td>
-          <td>{{ d.total_days }}</td>
-          <td>
-            <div style="display: flex; align-items: center; gap: 0.6rem;">
-              <div style="flex: 1; max-width: 100px; height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden;">
-                <div style="width: {{ d.percentage }}%; height: 100%; background: {% if d.is_defaulter %}#ef4444{% else %}#22c55e{% endif %};"></div>
+              <div style="display: flex; align-items: center; gap: 0.6rem;">
+                <div
+                  style="flex: 1; max-width: 100px; height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden;">
+                  <div
+                    style="width: {{ d.percentage }}%; height: 100%; background: #22c55e;">
+                  </div>
+                </div>
+                <strong style="color: #22c55e;">{{ d.percentage }}%</strong>
               </div>
-              <strong style="color: {% if d.is_defaulter %}#ef4444{% else %}#22c55e{% endif %};">{{ d.percentage }}%</strong>
-            </div>
-          </td>
-          <td>
-            {% if d.is_defaulter %}
-              <span class="badge badge-red"><i class="fa-solid fa-triangle-exclamation"></i> Below 75% (Defaulter)</span>
-            {% else %}
-              <span class="badge" style="background: rgba(34, 197, 94, 0.15); color: var(--green); border: 1px solid rgba(34, 197, 94, 0.3);">
-                <i class="fa-solid fa-check"></i> Eligible (&ge; 75%)
+            </td>
+            <td>
+              <span class="badge"
+                class="champion-streak">
+                <i class="fa-solid fa-fire"></i> {{ d.streak }} day streak
               </span>
-            {% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    {% else %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
       <p class="att-empty">No students enrolled yet.</p>
-    {% endif %}
+      {% endif %}
+    </div>
+
   </div>
 
-</div>
+  <!-- ── Toast ── -->
+  <div id="toast" class="toast hidden"></div>
 
-<!-- ── Toast ── -->
-<div id="toast" class="toast hidden"></div>
+  <script src="/static/js/main.js"></script>
+  <script>
+    let currentPunchMode = "in";
 
-<script src="/static/js/main.js"></script>
-<script>
-  let currentPunchMode = "in";
-
-  function setManualPunchMode(mode) {
-    currentPunchMode = mode;
-    const btnIn = document.getElementById("btn-mode-in");
-    const btnOut = document.getElementById("btn-mode-out");
-    if (mode === "in") {
-      btnIn.className = "btn btn-primary";
-      btnOut.className = "btn btn-secondary";
-      showToast("Manual mode: Check In", "info");
-    } else {
-      btnIn.className = "btn btn-secondary";
-      btnOut.className = "btn btn-primary";
-      showToast("Manual mode: Check Out", "info");
-    }
-  }
-
-  async function triggerManualPunch(name) {
-    try {
-      const res = await fetch("/api/mark_manual", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, punch_type: currentPunchMode })
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast(data.message || `Logged for ${name}`, "success");
-        setTimeout(() => location.reload(), 1100);
+    function setManualPunchMode(mode) {
+      currentPunchMode = mode;
+      const btnIn = document.getElementById("btn-mode-in");
+      const btnOut = document.getElementById("btn-mode-out");
+      if (mode === "in") {
+        btnIn.className = "btn btn-primary";
+        btnOut.className = "btn btn-secondary";
+        showToast("Manual mode: Check In", "info");
       } else {
-        showToast(data.message || "Failed to mark", "error");
+        btnIn.className = "btn btn-secondary";
+        btnOut.className = "btn btn-primary";
+        showToast("Manual mode: Check Out", "info");
       }
-    } catch (err) {
-      showToast("Network error: " + err.message, "error");
     }
-  }
 
-  function switchTab(tab) {
-    const btnLog = document.getElementById("tab-btn-log");
-    const btnDef = document.getElementById("tab-btn-defaulters");
-    const contentLog = document.getElementById("tab-content-log");
-    const contentDef = document.getElementById("tab-content-defaulters");
+    async function triggerManualPunch(name) {
+      try {
+        const res = await fetch("/api/mark_manual", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, punch_type: currentPunchMode })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message || `Logged for ${name}`, "success");
+          setTimeout(() => location.reload(), 1100);
+        } else {
+          showToast(data.message || "Failed to mark", "error");
+        }
 
-    if (tab === "log") {
-      btnLog.className = "btn btn-primary";
-      btnDef.className = "btn btn-secondary";
-      contentLog.classList.remove("hidden");
-      contentDef.classList.add("hidden");
-    } else {
-      btnLog.className = "btn btn-secondary";
-      btnDef.className = "btn btn-primary";
-      contentLog.classList.add("hidden");
-      contentDef.classList.remove("hidden");
+        async function reviewRegistration(id, status) {
+          try {
+            const response = await fetch(`/api/registration-requests/${id}/review`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ status })
+            });
+            const data = await response.json();
+            showToast(data.message || "Request updated.", data.success ? "success" : "error");
+            if (data.success) document.getElementById(`request-${id}`)?.remove();
+          } catch (error) {
+            showToast("Could not update registration request.", "error");
+          }
+        }
+      } catch (err) {
+        showToast("Network error: " + err.message, "error");
+      }
     }
-  }
 
-  function exportDefaultersCSV() {
-    window.location.href = "/api/defaulters?format=csv";
-  }
+    function switchTab(tab) {
+      const btnLog = document.getElementById("tab-btn-log");
+      const btnDef = document.getElementById("tab-btn-defaulters");
+      const contentLog = document.getElementById("tab-content-log");
+      const contentDef = document.getElementById("tab-content-defaulters");
 
-  // ── Pie Chart ──────────────────────────────────────────
-  const pieCtx = document.getElementById("pieChart").getContext("2d");
-  new Chart(pieCtx, {
-    type: "doughnut",
-    data: {
-      labels: ["Present", "Absent"],
-      datasets: [{
-        data: [{{ records | length }}, {{ absent | length }}],
-        backgroundColor: ["#22c55e", "#ef4444"],
-        borderWidth: 0,
-        hoverOffset: 8
+      if (tab === "log") {
+        btnLog.className = "btn btn-primary";
+        btnDef.className = "btn btn-secondary";
+        contentLog.classList.remove("hidden");
+        contentDef.classList.add("hidden");
+      } else {
+        btnLog.className = "btn btn-secondary";
+        btnDef.className = "btn btn-primary";
+        contentLog.classList.add("hidden");
+        contentDef.classList.remove("hidden");
+      }
+    }
+
+    // ── Pie Chart ──────────────────────────────────────────
+    const pieCtx = document.getElementById("pieChart").getContext("2d");
+    new Chart(pieCtx, {
+      type: "doughnut",
+      data: {
+        labels: ["Present", "Absent"],
+        datasets: [{
+          data: [{{ records | length }}, {{ absent | length }}],
+      backgroundColor: ["#22c55e", "#ef4444"],
+      borderWidth: 0,
+      hoverOffset: 8
       }]
     },
-    options: {
+      options: {
       plugins: {
         legend: { labels: { color: "#e4e4e7", font: { size: 13 } } }
       },
@@ -363,33 +417,19 @@
     }
   });
 
-  // ── Bar Chart (last 30 days) ──────────────────────────
-  fetch("/api/summary").then(r => r.json()).then(data => {
-    const reversed = [...data].reverse();
-    const barCtx = document.getElementById("barChart").getContext("2d");
-    new Chart(barCtx, {
-      type: "bar",
-      data: {
-        labels: reversed.map(d => d.date),
-        datasets: [{
-          label: "Present Students",
-          data: reversed.map(d => d.count),
-          backgroundColor: "rgba(255, 255, 255, 0.85)",
-          borderRadius: 4,
-          borderSkipped: false
-        }]
-      },
-      options: {
-        plugins: {
-          legend: { display: false }
-        },
-        scales: {
-          x: { ticks: { color: "#a1a1aa", maxRotation: 45 }, grid: { color: "#27272a" } },
-          y: { ticks: { color: "#a1a1aa", stepSize: 1 }, grid: { color: "#27272a" }, beginAtZero: true }
-        }
-      }
+    document.querySelectorAll(".tilt-card").forEach(card => {
+      card.addEventListener("pointermove", event => {
+        const bounds = card.getBoundingClientRect();
+        const x = (event.clientX - bounds.left) / bounds.width - 0.5;
+        const y = (event.clientY - bounds.top) / bounds.height - 0.5;
+        card.style.transform = `perspective(900px) rotateX(${y * -5}deg) rotateY(${x * 5}deg) translateY(-5px)`;
+      });
+      card.addEventListener("pointerleave", () => {
+        card.style.transform = "";
+      });
     });
-  });
-</script>
+
+  </script>
 </body>
+
 </html>

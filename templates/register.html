@@ -1,95 +1,103 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Vedant FC Attendance — Register</title>
-  <link rel="stylesheet" href="/static/css/style.css"/>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
 </head>
+
 <body>
 
-<nav class="navbar">
-  <div class="brand">
-    <i class="fa-solid fa-eye"></i>
-    <span>Vedant FC Attendance</span>
-    <span class="badge badge-info" style="font-size: 0.72rem; margin-left: 0.3rem;">ADMIN</span>
-  </div>
-  <div class="nav-links">
-    <a href="/"><i class="fa-solid fa-video"></i> Live</a>
-    <a href="/register" class="active"><i class="fa-solid fa-user-plus"></i> Register</a>
-    <a href="/dashboard"><i class="fa-solid fa-chart-bar"></i> Dashboard</a>
-    <a href="/logout" style="color: var(--red); border-color: rgba(239, 68, 68, 0.3);"><i class="fa-solid fa-arrow-right-from-bracket"></i> Logout</a>
-  </div>
-</nav>
+  <nav class="navbar">
+    <div class="brand">
+      <i class="fa-solid fa-eye"></i>
+      <span>Vedant FC Attendance</span>
+      <span class="badge badge-info" style="font-size: 0.72rem; margin-left: 0.3rem;">{{ "TEACHER PORTAL" if is_admin else "STUDENT REQUEST" }}</span>
+    </div>
+    <div class="nav-links">
+      <a href="/"><i class="fa-solid fa-video"></i> Attendance</a>
+      <a href="/register" class="active"><i class="fa-solid fa-user-plus"></i> Register</a>
+      {% if is_admin %}<a href="/dashboard"><i class="fa-solid fa-chart-bar"></i> Dashboard</a>
+      <a href="/logout" style="color: var(--red); border-color: rgba(239, 68, 68, 0.3);"><i
+          class="fa-solid fa-arrow-right-from-bracket"></i> Logout</a>
+      {% endif %}
+    </div>
+  </nav>
 
-<div class="page-register">
+  <div class="page-register">
+    <div class="ambient-orb register-orb-one"></div>
+    <div class="ambient-orb register-orb-two"></div>
 
-  <!-- ── Registration form ── -->
-  <div class="register-card">
-    <h2 class="card-title"><i class="fa-solid fa-user-plus"></i> Register New Face</h2>
-    <p class="card-subtitle">Position your face in the camera, enter your name, and capture 3 photos for best accuracy.</p>
-    
-    <!-- Webcam preview — HTML5 browser webcam -->
-    <div class="webcam-wrapper" style="position: relative; overflow: hidden; border-radius: 10px; background: #000; min-height: 280px; display: flex; align-items: center; justify-content: center;">
-      <video id="webcam-video" autoplay playsinline muted
-             style="width:100%;height:100%;object-fit:cover;display:block;border-radius:10px;"></video>
-      <div id="capture-overlay" class="capture-overlay hidden">
-        <i class="fa-solid fa-check-circle"></i>
+    <!-- ── Registration form ── -->
+    <div class="register-card register-tilt-card">
+      <h2 class="card-title"><i class="fa-solid fa-user-plus"></i> Register New Face</h2>
+      <p class="card-subtitle">{% if is_admin %}Position the face in the camera, enter the name, and capture 3 photos.{% else %}Capture 3 clear photos. A teacher will approve your request before attendance becomes active.{% endif %}</p>
+
+      <!-- Webcam preview — HTML5 browser webcam -->
+      <div class="webcam-wrapper"
+        style="position: relative; overflow: hidden; border-radius: 10px; background: #000; min-height: 280px; display: flex; align-items: center; justify-content: center;">
+        <video id="webcam-video" autoplay playsinline muted
+          style="width:100%;height:100%;object-fit:cover;display:block;border-radius:10px;"></video>
+        <div id="capture-overlay" class="capture-overlay hidden">
+          <i class="fa-solid fa-check-circle"></i>
+        </div>
+        <div id="camera-placeholder" class="camera-placeholder">
+          <i class="fa-solid fa-video-slash fa-3x" style="color:#ffffff;margin-bottom:12px;"></i>
+          <p id="cam-status" style="color:#e2e8f0;font-size:0.95rem;margin-bottom:12px;">Camera permission required.</p>
+          <button class="btn btn-primary" onclick="initWebcam()">
+            <i class="fa-solid fa-camera"></i> Start Camera
+          </button>
+        </div>
       </div>
-      <div id="camera-placeholder" class="camera-placeholder">
-        <i class="fa-solid fa-video-slash fa-3x" style="color:#ffffff;margin-bottom:12px;"></i>
-        <p id="cam-status" style="color:#e2e8f0;font-size:0.95rem;margin-bottom:12px;">Camera permission required.</p>
-        <button class="btn btn-primary" onclick="initWebcam()">
-          <i class="fa-solid fa-camera"></i> Start Camera
+
+      <!-- Thumbnails of captured frames -->
+      <div id="thumbs" class="thumb-row" style="margin-top: 12px; min-height: 50px;"></div>
+
+      <!-- Name input -->
+      <div class="form-group" style="margin-top: 14px;">
+        <label for="name-input"><i class="fa-solid fa-id-badge"></i> Full Name</label>
+        <input type="text" id="name-input" placeholder="e.g. Vedant Sharma" autocomplete="off" />
+      </div>
+
+      <!-- Capture count indicator -->
+      <div class="capture-status">
+        <span id="capture-label">Captures: <strong id="capture-count">0</strong> / 3</span>
+        <div class="capture-dots">
+          <div class="cdot" id="dot-0"></div>
+          <div class="cdot" id="dot-1"></div>
+          <div class="cdot" id="dot-2"></div>
+        </div>
+      </div>
+
+      <!-- Buttons -->
+      <div class="form-actions" style="display: flex; flex-wrap: wrap; gap: 8px;">
+        <button id="btn-capture" class="btn btn-primary">
+          <i class="fa-solid fa-camera"></i> Capture Photo
+        </button>
+        <input type="file" id="file-upload" accept="image/*" style="display:none;" />
+        <button id="btn-upload" class="btn btn-secondary" onclick="document.getElementById('file-upload').click()">
+          <i class="fa-solid fa-upload"></i> Upload Image
+        </button>
+        <button id="btn-register" class="btn btn-success" disabled>
+          <i class="fa-solid fa-user-check"></i> Register
+        </button>
+        <button id="btn-reset" class="btn btn-secondary">
+          <i class="fa-solid fa-rotate-left"></i> Reset
         </button>
       </div>
+
+      <div id="reg-message" class="reg-message hidden"></div>
     </div>
 
-    <!-- Thumbnails of captured frames -->
-    <div id="thumbs" class="thumb-row" style="margin-top: 12px; min-height: 50px;"></div>
-
-    <!-- Name input -->
-    <div class="form-group" style="margin-top: 14px;">
-      <label for="name-input"><i class="fa-solid fa-id-badge"></i> Full Name</label>
-      <input type="text" id="name-input" placeholder="e.g. Vedant Sharma" autocomplete="off"/>
-    </div>
-
-    <!-- Capture count indicator -->
-    <div class="capture-status">
-      <span id="capture-label">Captures: <strong id="capture-count">0</strong> / 3</span>
-      <div class="capture-dots">
-        <div class="cdot" id="dot-0"></div>
-        <div class="cdot" id="dot-1"></div>
-        <div class="cdot" id="dot-2"></div>
-      </div>
-    </div>
-
-    <!-- Buttons -->
-    <div class="form-actions" style="display: flex; flex-wrap: wrap; gap: 8px;">
-      <button id="btn-capture" class="btn btn-primary">
-        <i class="fa-solid fa-camera"></i> Capture Photo
-      </button>
-      <input type="file" id="file-upload" accept="image/*" style="display:none;"/>
-      <button id="btn-upload" class="btn btn-secondary" onclick="document.getElementById('file-upload').click()">
-        <i class="fa-solid fa-upload"></i> Upload Image
-      </button>
-      <button id="btn-register" class="btn btn-success" disabled>
-        <i class="fa-solid fa-user-check"></i> Register
-      </button>
-      <button id="btn-reset" class="btn btn-secondary">
-        <i class="fa-solid fa-rotate-left"></i> Reset
-      </button>
-    </div>
-
-    <div id="reg-message" class="reg-message hidden"></div>
-  </div>
-
-  <!-- ── Registered people ── -->
-  <div class="registered-card">
-    <h2 class="card-title"><i class="fa-solid fa-users"></i> Registered People</h2>
-    <ul class="registered-list" id="reg-list">
-      {% if registered %}
+    {% if is_admin %}
+    <!-- ── Registered people ── -->
+    <div class="registered-card register-tilt-card">
+      <h2 class="card-title"><i class="fa-solid fa-users"></i> Registered People</h2>
+      <ul class="registered-list" id="reg-list">
+        {% if registered %}
         {% for name in registered %}
         <li class="reg-item">
           <span class="att-avatar">{{ name[0].upper() }}</span>
@@ -99,187 +107,194 @@
           </button>
         </li>
         {% endfor %}
-      {% else %}
+        {% else %}
         <li class="att-empty">No one registered yet.</li>
-      {% endif %}
-    </ul>
+        {% endif %}
+      </ul>
+    </div>
+    {% else %}
+    <div class="registered-card register-tilt-card">
+      <h2 class="card-title"><i class="fa-solid fa-shield-halved"></i> Approval Required</h2>
+      <p class="card-subtitle">Your face data is not activated immediately. A teacher must review and approve it first.</p>
+    </div>
+    {% endif %}
+
   </div>
 
-</div>
+  <div id="toast" class="toast hidden"></div>
 
-<div id="toast" class="toast hidden"></div>
+  <script src="/static/js/main.js"></script>
+  <script>
+    const video = document.getElementById("webcam-video");
+    const placeholder = document.getElementById("camera-placeholder");
+    const camStatus = document.getElementById("cam-status");
+    const captureCount = document.getElementById("capture-count");
+    const btnCapture = document.getElementById("btn-capture");
+    const btnRegister = document.getElementById("btn-register");
+    const btnReset = document.getElementById("btn-reset");
+    const nameInput = document.getElementById("name-input");
+    const regMessage = document.getElementById("reg-message");
+    const thumbs = document.getElementById("thumbs");
+    const fileUpload = document.getElementById("file-upload");
+    const MAX_CAPTURES = 3;
+    let captures = [];
+    let streamActive = false;
 
-<script src="/static/js/main.js"></script>
-<script>
-  const video = document.getElementById("webcam-video");
-  const placeholder = document.getElementById("camera-placeholder");
-  const camStatus = document.getElementById("cam-status");
-  const captureCount = document.getElementById("capture-count");
-  const btnCapture   = document.getElementById("btn-capture");
-  const btnRegister  = document.getElementById("btn-register");
-  const btnReset     = document.getElementById("btn-reset");
-  const nameInput    = document.getElementById("name-input");
-  const regMessage   = document.getElementById("reg-message");
-  const thumbs       = document.getElementById("thumbs");
-  const fileUpload   = document.getElementById("file-upload");
-  const MAX_CAPTURES = 3;
-  let captures = [];
-  let streamActive = false;
+    async function initWebcam() {
+      try {
+        camStatus.textContent = "Connecting to webcam…";
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+          audio: false
+        });
+        video.srcObject = stream;
+        await video.play();
+        streamActive = true;
+        placeholder.classList.add("hidden");
+      } catch (err) {
+        console.warn("Webcam error:", err);
+        placeholder.classList.remove("hidden");
+        if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+          camStatus.innerHTML = "<strong style='color:#ef4444;'>Camera blocked in browser!</strong><br/><span style='font-size:0.8rem;color:var(--muted);'>Click the 🔒 icon in the URL bar and select 'Allow' for Camera.</span>";
+        } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
+          camStatus.innerHTML = "<strong style='color:#eab308;'>Camera is in use by another app!</strong><br/><span style='font-size:0.8rem;color:var(--muted);'>Close other apps using camera or use 'Upload Image' below.</span>";
+        } else {
+          camStatus.textContent = "Webcam unavailable. You can use 'Upload Image' below.";
+        }
+      }
 
-  async function initWebcam() {
-    try {
-      camStatus.textContent = "Connecting to webcam…";
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
-        audio: false
-      });
-      video.srcObject = stream;
-      await video.play();
-      streamActive = true;
-      placeholder.classList.add("hidden");
-    } catch (err) {
-      console.warn("Webcam error:", err);
-      placeholder.classList.remove("hidden");
-      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-        camStatus.innerHTML = "<strong style='color:#ef4444;'>Camera blocked in browser!</strong><br/><span style='font-size:0.8rem;color:var(--muted);'>Click the 🔒 icon in the URL bar and select 'Allow' for Camera.</span>";
-      } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
-        camStatus.innerHTML = "<strong style='color:#eab308;'>Camera is in use by another app!</strong><br/><span style='font-size:0.8rem;color:var(--muted);'>Close other apps using camera or use 'Upload Image' below.</span>";
-      } else {
-        camStatus.textContent = "Webcam unavailable. You can use 'Upload Image' below.";
+    }
+
+    // ── Capture frame directly from BROWSER camera ──────────
+    btnCapture.addEventListener("click", () => {
+      if (captures.length >= MAX_CAPTURES) return;
+
+      if (!streamActive || video.readyState < 2) {
+        showToast("Camera is not active. Please click 'Start Camera' or 'Upload Image'.", "error");
+        return;
+      }
+
+      try {
+        const snapCanvas = document.createElement("canvas");
+        snapCanvas.width = video.videoWidth || 640;
+        snapCanvas.height = video.videoHeight || 480;
+        const ctx = snapCanvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, snapCanvas.width, snapCanvas.height);
+        const imgData = snapCanvas.toDataURL("image/jpeg", 0.9);
+
+        addCapture(imgData);
+
+        // Flash overlay
+        const overlay = document.getElementById("capture-overlay");
+        overlay.classList.remove("hidden");
+        setTimeout(() => overlay.classList.add("hidden"), 400);
+
+      } catch (err) {
+        showToast("Error capturing photo: " + err.message, "error");
+      }
+    });
+
+    // Handle file upload fallback
+    fileUpload.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        addCapture(event.target.result);
+      };
+      reader.readAsDataURL(file);
+      fileUpload.value = "";
+    });
+
+    function addCapture(imgData) {
+      if (captures.length >= MAX_CAPTURES) return;
+      captures.push(imgData);
+
+      const img = document.createElement("img");
+      img.src = imgData;
+      img.className = "thumb";
+      thumbs.appendChild(img);
+
+      captureCount.textContent = captures.length;
+      document.getElementById(`dot-${captures.length - 1}`).classList.add("dot-filled");
+
+      if (captures.length >= MAX_CAPTURES) {
+        btnCapture.disabled = true;
+        btnRegister.disabled = false;
+        showToast("3 photos captured! Enter name and click Register.", "success");
       }
     }
 
-  }
+    // Register all captures
+    btnRegister.addEventListener("click", async () => {
+      const name = nameInput.value.trim();
+      if (!name) { showToast("Please enter a name.", "error"); return; }
 
-  // ── Capture frame directly from BROWSER camera ──────────
-  btnCapture.addEventListener("click", () => {
-    if (captures.length >= MAX_CAPTURES) return;
+      btnRegister.disabled = true;
+      btnRegister.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Registering…';
 
-    if (!streamActive || video.readyState < 2) {
-      showToast("Camera is not active. Please click 'Start Camera' or 'Upload Image'.", "error");
-      return;
-    }
+      let successCount = 0;
+      let lastMessage = "";
 
-    try {
-      const snapCanvas = document.createElement("canvas");
-      snapCanvas.width = video.videoWidth || 640;
-      snapCanvas.height = video.videoHeight || 480;
-      const ctx = snapCanvas.getContext("2d");
-      ctx.drawImage(video, 0, 0, snapCanvas.width, snapCanvas.height);
-      const imgData = snapCanvas.toDataURL("image/jpeg", 0.9);
+      for (const imgData of captures) {
+        try {
+          const res = await fetch("/api/register", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, image: imgData })
+          });
+          const data = await res.json();
+          lastMessage = data.message;
+          if (data.success) successCount++;
+        } catch (err) {
+          lastMessage = err.message;
+        }
+      }
 
-      addCapture(imgData);
+      if (successCount > 0) {
+        showReg(`✅ ${lastMessage || `${name} submitted for approval.`}`, "success");
+        setTimeout(() => location.reload(), 1800);
+      } else {
+        showReg(`❌ ${lastMessage}`, "error");
+        btnRegister.disabled = false;
+        btnRegister.innerHTML = '<i class="fa-solid fa-user-check"></i> Register';
+      }
+    });
 
-      // Flash overlay
-      const overlay = document.getElementById("capture-overlay");
-      overlay.classList.remove("hidden");
-      setTimeout(() => overlay.classList.add("hidden"), 400);
+    // Reset
+    btnReset.addEventListener("click", () => {
+      captures = [];
+      thumbs.innerHTML = "";
+      captureCount.textContent = "0";
+      [0, 1, 2].forEach(i => document.getElementById(`dot-${i}`).classList.remove("dot-filled"));
+      btnCapture.disabled = false;
+      btnRegister.disabled = true;
+      regMessage.classList.add("hidden");
+    });
 
-    } catch (err) {
-      showToast("Error capturing photo: " + err.message, "error");
-    }
-  });
-
-  // Handle file upload fallback
-  fileUpload.addEventListener("change", (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      addCapture(event.target.result);
-    };
-    reader.readAsDataURL(file);
-    fileUpload.value = "";
-  });
-
-  function addCapture(imgData) {
-    if (captures.length >= MAX_CAPTURES) return;
-    captures.push(imgData);
-
-    const img = document.createElement("img");
-    img.src = imgData;
-    img.className = "thumb";
-    thumbs.appendChild(img);
-
-    captureCount.textContent = captures.length;
-    document.getElementById(`dot-${captures.length - 1}`).classList.add("dot-filled");
-
-    if (captures.length >= MAX_CAPTURES) {
-      btnCapture.disabled = true;
-      btnRegister.disabled = false;
-      showToast("3 photos captured! Enter name and click Register.", "success");
-    }
-  }
-
-  // Register all captures
-  btnRegister.addEventListener("click", async () => {
-    const name = nameInput.value.trim();
-    if (!name) { showToast("Please enter a name.", "error"); return; }
-
-    btnRegister.disabled = true;
-    btnRegister.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Registering…';
-
-    let successCount = 0;
-    let lastMessage = "";
-
-    for (const imgData of captures) {
-      try {
-        const res = await fetch("/api/register", {
+    // Delete person
+    document.querySelectorAll(".delete-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const name = btn.dataset.name;
+        if (!confirm(`Remove ${name} from the system?`)) return;
+        const res = await fetch("/api/delete_person", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, image: imgData })
+          body: JSON.stringify({ name })
         });
         const data = await res.json();
-        lastMessage = data.message;
-        if (data.success) successCount++;
-      } catch (err) {
-        lastMessage = err.message;
-      }
-    }
-
-    if (successCount > 0) {
-      showReg(`✅ ${name} registered with ${successCount} photo(s)! Reloading…`, "success");
-      setTimeout(() => location.reload(), 1800);
-    } else {
-      showReg(`❌ ${lastMessage}`, "error");
-      btnRegister.disabled = false;
-      btnRegister.innerHTML = '<i class="fa-solid fa-user-check"></i> Register';
-    }
-  });
-
-  // Reset
-  btnReset.addEventListener("click", () => {
-    captures = [];
-    thumbs.innerHTML = "";
-    captureCount.textContent = "0";
-    [0,1,2].forEach(i => document.getElementById(`dot-${i}`).classList.remove("dot-filled"));
-    btnCapture.disabled = false;
-    btnRegister.disabled = true;
-    regMessage.classList.add("hidden");
-  });
-
-  // Delete person
-  document.querySelectorAll(".delete-btn").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const name = btn.dataset.name;
-      if (!confirm(`Remove ${name} from the system?`)) return;
-      const res = await fetch("/api/delete_person", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name })
+        showToast(data.message, data.success ? "success" : "error");
+        if (data.success) setTimeout(() => location.reload(), 1200);
       });
-      const data = await res.json();
-      showToast(data.message, data.success ? "success" : "error");
-      if (data.success) setTimeout(() => location.reload(), 1200);
     });
-  });
 
-  function showReg(msg, type) {
-    regMessage.textContent = msg;
-    regMessage.className = `reg-message reg-${type}`;
-  }
+    function showReg(msg, type) {
+      regMessage.textContent = msg;
+      regMessage.className = `reg-message reg-${type}`;
+    }
 
-  window.addEventListener("DOMContentLoaded", initWebcam);
-</script>
+    window.addEventListener("DOMContentLoaded", initWebcam);
+  </script>
 </body>
+
 </html>

@@ -1,600 +1,685 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Vedant FC Attendance — Live Kiosk</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vedant FC Attendance — Live Attendance</title>
   <link rel="stylesheet" href="/static/css/style.css" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
 </head>
+
 <body>
 
-<!-- ── NAVBAR ─────────────────────────────────────────── -->
-<nav class="navbar">
-  <div class="brand">
-    <i class="fa-solid fa-eye"></i>
-    <span>Vedant FC Attendance</span>
-    <span class="badge badge-info" style="font-size: 0.72rem; margin-left: 0.3rem;">KIOSK</span>
-  </div>
-  
-  <div class="nav-links">
-    <a href="/" class="active"><i class="fa-solid fa-video"></i> Live</a>
-    
-    {% if is_admin %}
-      <a href="/register"><i class="fa-solid fa-user-plus"></i> Register</a>
+  <!-- ── NAVBAR ─────────────────────────────────────────── -->
+  <nav class="navbar">
+    <div class="brand">
+      <i class="fa-solid fa-eye"></i>
+      <span>Vedant FC Attendance</span>
+      <span class="badge badge-info" style="font-size: 0.72rem; margin-left: 0.3rem;">ATTENDANCE</span>
+    </div>
+
+    <div class="nav-links">
+      <a href="/" class="active"><i class="fa-solid fa-video"></i> Attendance</a>
+      <a href="/register"><i class="fa-solid fa-user-plus"></i> Register Student</a>
+
+      {% if is_admin %}
       <a href="/dashboard"><i class="fa-solid fa-chart-bar"></i> Dashboard</a>
-      <a href="/logout" style="color: var(--red); border-color: rgba(239, 68, 68, 0.3);"><i class="fa-solid fa-arrow-right-from-bracket"></i> Logout</a>
-    {% else %}
+      <a href="/logout" style="color: var(--red); border-color: rgba(239, 68, 68, 0.3);"><i
+          class="fa-solid fa-arrow-right-from-bracket"></i> Logout</a>
+      {% else %}
       <a href="/login" style="background: var(--surface2); color: #ffffff; border: 1px solid var(--border);">
         <i class="fa-solid fa-shield-halved"></i> Admin Login
       </a>
-    {% endif %}
+      {% endif %}
+    </div>
+  </nav>
+
+  <!-- ── MAIN CONTENT ─────────────────────────────────── -->
+  <div class="page-live">
+    <div class="ambient-orb live-orb-one"></div>
+    <div class="ambient-orb live-orb-two"></div>
+
+    <div class="student-welcome">
+      <div>
+        <p class="eyebrow"><i class="fa-solid fa-sparkles"></i> Smart attendance</p>
+        <h1>Show up. Stay on track.</h1>
+        <p class="welcome-copy">Look into the camera and your attendance will be recorded automatically.</p>
+      </div>
+      <div class="live-clock">
+        <span id="live-time">--:--:--</span>
+        <small id="live-date">{{ today }}</small>
+      </div>
+    </div>
+
+    <!-- Left: camera panel -->
+    <div class="camera-panel live-tilt-card">
+
+      <div class="panel-header">
+        <div style="display: flex; align-items: center; gap: 0.6rem;">
+          <i class="fa-solid fa-circle recording-dot"></i>
+          <span>Live Recognition Feed</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <span id="face-count" class="badge badge-info">0 faces</span>
+          <span id="detection-status-badge" class="badge"
+            style="background: rgba(34, 197, 94, 0.15); color: var(--green); border: 1px solid rgba(34, 197, 94, 0.3);">Active</span>
+        </div>
+      </div>
+
+      <!-- Camera Toolbar Controls -->
+      <div class="camera-toolbar"
+        style="padding: 0.6rem 1rem; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+
+        <!-- Device Selector -->
+        <div style="display: flex; align-items: center; gap: 0.4rem;">
+          <i class="fa-solid fa-camera" style="color: var(--muted); font-size: 0.85rem;"></i>
+          <select id="camera-select"
+            style="background: var(--surface2); color: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.35rem 0.65rem; font-size: 0.8rem; outline: none; cursor: pointer; max-width: 200px;">
+            <option value="">Default Camera</option>
+          </select>
+        </div>
+
+        <!-- Controls: Pause/Resume, Sound Toggle, Punch Mode -->
+        <div style="display: flex; align-items: center; gap: 0.4rem;">
+
+          <!-- Punch Mode selector -->
+          <select id="punch-mode" title="Punch Mode"
+            style="background: var(--surface2); color: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.35rem 0.65rem; font-size: 0.8rem; outline: none; cursor: pointer;">
+            <option value="auto">Auto (In / Out)</option>
+            <option value="in">Force Check-In</option>
+            <option value="out">Force Check-Out</option>
+          </select>
+
+          <!-- Sound toggle -->
+          <button id="btn-toggle-sound" class="btn btn-secondary" style="padding: 0.35rem 0.7rem; font-size: 0.8rem;"
+            title="Toggle Sound / Voice Announcement">
+            <i id="sound-icon" class="fa-solid fa-volume-high"></i> <span id="sound-label">Audio On</span>
+          </button>
+
+          <!-- Pause / Resume detection -->
+          <button id="btn-toggle-detect" class="btn btn-secondary" style="padding: 0.35rem 0.7rem; font-size: 0.8rem;"
+            title="Pause or Resume Frame Processing">
+            <i id="detect-icon" class="fa-solid fa-pause"></i> <span id="detect-label">Pause</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Camera Feed Area -->
+      <div class="camera-wrapper" id="camera-wrapper">
+        <video id="webcam-video" autoplay playsinline muted></video>
+        <canvas id="camera-overlay" class="camera-overlay-canvas"></canvas>
+
+        <!-- Multi-face Warning Banner -->
+        <div id="multi-face-alert" class="multi-face-alert hidden"
+          style="position: absolute; top: 12px; left: 50%; transform: translateX(-50%); background: rgba(239, 68, 68, 0.95); color: #ffffff; padding: 0.5rem 1.1rem; border-radius: 20px; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; z-index: 10; box-shadow: 0 4px 16px rgba(0,0,0,0.5);">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <span>Multiple faces detected! Please approach one at a time.</span>
+        </div>
+
+        <!-- Cooldown Indicator -->
+        <div id="cooldown-pill" class="hidden"
+          style="position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); background: rgba(24, 24, 27, 0.9); border: 1px solid var(--border); color: #ffffff; padding: 0.4rem 1rem; border-radius: 20px; font-size: 0.8rem; display: flex; align-items: center; gap: 0.5rem; z-index: 10;">
+          <i class="fa-solid fa-clock-rotate-left" style="color: var(--green);"></i>
+          <span id="cooldown-text">Cooldown active</span>
+        </div>
+
+        <div id="camera-placeholder" class="camera-placeholder">
+          <i class="fa-solid fa-video-slash fa-3x" style="color: #ffffff; margin-bottom: 14px;"></i>
+          <p id="camera-status-text" style="color: #e2e8f0; font-size: 0.95rem; margin-bottom: 14px; max-width: 320px;">
+            Connecting to webcam…
+          </p>
+          <button id="btn-start-camera" class="btn btn-primary" onclick="initWebcam()">
+            <i class="fa-solid fa-camera"></i> Allow Camera Access
+          </button>
+        </div>
+      </div>
+
+      <p class="camera-hint" style="display: flex; align-items: center; justify-content: space-between;">
+        <span><i class="fa-solid fa-info-circle"></i> Look directly into the camera. AI logs check-in on first arrival
+          and check-out on exit.</span>
+        <span style="font-size: 0.75rem; color: var(--muted);"><i class="fa-solid fa-shield-check"></i> Anti-Spoofing
+          Active</span>
+      </p>
+    </div>
+
+    <!-- Right: today's attendance -->
+    <div class="attendance-panel live-tilt-card">
+
+      <div class="panel-header">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <i class="fa-solid fa-clipboard-check"></i>
+          <span>Today's Activity</span>
+        </div>
+        <span id="today-date" class="date-badge">{{ today }}</span>
+      </div>
+
+      <!-- Stats bar with animated counters -->
+      <div class="stats-bar">
+        <div class="stat-item">
+          <div class="stat-number" id="present-count">0</div>
+          <div class="stat-label">Present Today</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-number" id="registered-count">0</div>
+          <div class="stat-label">Total Enrolled</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-number" id="absent-count">0</div>
+          <div class="stat-label">Not Yet In</div>
+        </div>
+      </div>
+
+      <div class="attendance-insight">
+        <div class="insight-heading">
+          <span><i class="fa-solid fa-chart-line"></i> Your attendance</span>
+          <strong id="personal-percent">--</strong>
+        </div>
+        <div class="progress-track"><span id="personal-progress"></span></div>
+        <p id="personal-status">Your percentage appears after you are recognised.</p>
+      </div>
+
+      <!-- Attendance list -->
+      <div class="att-list-wrapper">
+        <ul id="att-list" class="att-list">
+          <li class="att-empty" id="empty-state">
+            <i class="fa-solid fa-face-smile fa-2x"
+              style="color: var(--border); margin-bottom: 0.6rem; display: block;"></i>
+            Waiting for face recognition…
+          </li>
+        </ul>
+      </div>
+
+      <!-- Footer Status info -->
+      <div
+        style="padding: 0.75rem 1.1rem; border-top: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: space-between; font-size: 0.78rem; color: var(--muted);">
+        <span><i class="fa-solid fa-shield-halved"></i> Faculty Mode: {% if is_admin %}<strong
+            style="color: var(--green);">Logged In</strong>{% else %}Protected{% endif %}</span>
+        <span id="network-status" style="display: flex; align-items: center; gap: 0.3rem;"><i class="fa-solid fa-wifi"
+            style="color: var(--green);"></i> Online</span>
+      </div>
+
+    </div>
+
   </div>
-</nav>
 
-<!-- ── MAIN CONTENT ─────────────────────────────────── -->
-<div class="page-live">
+  <!-- ── TOAST ─────────────────────────────────────────── -->
+  <div id="toast" class="toast hidden"></div>
 
-  <!-- Left: camera panel -->
-  <div class="camera-panel">
-    
-    <div class="panel-header">
-      <div style="display: flex; align-items: center; gap: 0.6rem;">
-        <i class="fa-solid fa-circle recording-dot"></i>
-        <span>Live Recognition Feed</span>
-      </div>
-      <div style="display: flex; align-items: center; gap: 0.5rem;">
-        <span id="face-count" class="badge badge-info">0 faces</span>
-        <span id="detection-status-badge" class="badge" style="background: rgba(34, 197, 94, 0.15); color: var(--green); border: 1px solid rgba(34, 197, 94, 0.3);">Active</span>
-      </div>
+  <div id="success-modal" class="success-modal hidden" role="status" aria-live="polite">
+    <div class="success-modal-card">
+      <div class="success-icon"><i class="fa-solid fa-check"></i></div>
+      <p class="eyebrow">Attendance updated</p>
+      <h2 id="success-title">Welcome!</h2>
+      <p id="success-details">Your attendance has been marked successfully.</p>
+      <button class="btn btn-primary" onclick="closeSuccessModal()">Continue</button>
     </div>
-
-    <!-- Camera Toolbar Controls -->
-    <div class="camera-toolbar" style="padding: 0.6rem 1rem; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
-      
-      <!-- Device Selector -->
-      <div style="display: flex; align-items: center; gap: 0.4rem;">
-        <i class="fa-solid fa-camera" style="color: var(--muted); font-size: 0.85rem;"></i>
-        <select id="camera-select" style="background: var(--surface2); color: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.35rem 0.65rem; font-size: 0.8rem; outline: none; cursor: pointer; max-width: 200px;">
-          <option value="">Default Camera</option>
-        </select>
-      </div>
-
-      <!-- Controls: Pause/Resume, Sound Toggle, Punch Mode -->
-      <div style="display: flex; align-items: center; gap: 0.4rem;">
-        
-        <!-- Punch Mode selector -->
-        <select id="punch-mode" title="Punch Mode" style="background: var(--surface2); color: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.35rem 0.65rem; font-size: 0.8rem; outline: none; cursor: pointer;">
-          <option value="auto">Auto (In / Out)</option>
-          <option value="in">Force Check-In</option>
-          <option value="out">Force Check-Out</option>
-        </select>
-
-        <!-- Sound toggle -->
-        <button id="btn-toggle-sound" class="btn btn-secondary" style="padding: 0.35rem 0.7rem; font-size: 0.8rem;" title="Toggle Sound / Voice Announcement">
-          <i id="sound-icon" class="fa-solid fa-volume-high"></i> <span id="sound-label">Audio On</span>
-        </button>
-
-        <!-- Pause / Resume detection -->
-        <button id="btn-toggle-detect" class="btn btn-secondary" style="padding: 0.35rem 0.7rem; font-size: 0.8rem;" title="Pause or Resume Frame Processing">
-          <i id="detect-icon" class="fa-solid fa-pause"></i> <span id="detect-label">Pause</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Camera Feed Area -->
-    <div class="camera-wrapper" id="camera-wrapper">
-      <video id="webcam-video" autoplay playsinline muted></video>
-      <canvas id="camera-overlay" class="camera-overlay-canvas"></canvas>
-      
-      <!-- Multi-face Warning Banner -->
-      <div id="multi-face-alert" class="multi-face-alert hidden" style="position: absolute; top: 12px; left: 50%; transform: translateX(-50%); background: rgba(239, 68, 68, 0.95); color: #ffffff; padding: 0.5rem 1.1rem; border-radius: 20px; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; z-index: 10; box-shadow: 0 4px 16px rgba(0,0,0,0.5);">
-        <i class="fa-solid fa-triangle-exclamation"></i>
-        <span>Multiple faces detected! Please approach one at a time.</span>
-      </div>
-
-      <!-- Cooldown Indicator -->
-      <div id="cooldown-pill" class="hidden" style="position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); background: rgba(24, 24, 27, 0.9); border: 1px solid var(--border); color: #ffffff; padding: 0.4rem 1rem; border-radius: 20px; font-size: 0.8rem; display: flex; align-items: center; gap: 0.5rem; z-index: 10;">
-        <i class="fa-solid fa-clock-rotate-left" style="color: var(--green);"></i>
-        <span id="cooldown-text">Cooldown active</span>
-      </div>
-
-      <div id="camera-placeholder" class="camera-placeholder">
-        <i class="fa-solid fa-video-slash fa-3x" style="color: #ffffff; margin-bottom: 14px;"></i>
-        <p id="camera-status-text" style="color: #e2e8f0; font-size: 0.95rem; margin-bottom: 14px; max-width: 320px;">
-          Connecting to webcam…
-        </p>
-        <button id="btn-start-camera" class="btn btn-primary" onclick="initWebcam()">
-          <i class="fa-solid fa-camera"></i> Allow Camera Access
-        </button>
-      </div>
-    </div>
-    
-    <p class="camera-hint" style="display: flex; align-items: center; justify-content: space-between;">
-      <span><i class="fa-solid fa-info-circle"></i> Look directly into the camera. AI logs check-in on first arrival and check-out on exit.</span>
-      <span style="font-size: 0.75rem; color: var(--muted);"><i class="fa-solid fa-shield-check"></i> Anti-Spoofing Active</span>
-    </p>
   </div>
 
-  <!-- Right: today's attendance -->
-  <div class="attendance-panel">
-    
-    <div class="panel-header">
-      <div style="display: flex; align-items: center; gap: 0.5rem;">
-        <i class="fa-solid fa-clipboard-check"></i>
-        <span>Today's Activity</span>
-      </div>
-      <span id="today-date" class="date-badge">{{ today }}</span>
-    </div>
+  <script src="/static/js/main.js"></script>
+  <script>
+    const video = document.getElementById("webcam-video");
+    const cameraWrapper = document.getElementById("camera-wrapper");
+    const overlay = document.getElementById("camera-overlay");
+    const overlayCtx = overlay.getContext("2d");
+    const placeholder = document.getElementById("camera-placeholder");
+    const statusText = document.getElementById("camera-status-text");
+    const faceCountBadge = document.getElementById("face-count");
+    const detectStatusBadge = document.getElementById("detection-status-badge");
+    const multiFaceAlert = document.getElementById("multi-face-alert");
+    const cooldownPill = document.getElementById("cooldown-pill");
+    const cooldownText = document.getElementById("cooldown-text");
+    const cameraSelect = document.getElementById("camera-select");
+    const btnToggleDetect = document.getElementById("btn-toggle-detect");
+    const btnToggleSound = document.getElementById("btn-toggle-sound");
+    const punchModeSelect = document.getElementById("punch-mode");
 
-    <!-- Stats bar with animated counters -->
-    <div class="stats-bar">
-      <div class="stat-item">
-        <div class="stat-number" id="present-count">0</div>
-        <div class="stat-label">Present Today</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-number" id="registered-count">0</div>
-        <div class="stat-label">Total Enrolled</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-number" id="absent-count">0</div>
-        <div class="stat-label">Not Yet In</div>
-      </div>
-    </div>
+    let currentStream = null;
+    let streamActive = false;
+    let detectionPaused = false;
+    let soundEnabled = true;
+    let processing = false;
+    let recognisedName = null;
 
-    <!-- Attendance list -->
-    <div class="att-list-wrapper">
-      <ul id="att-list" class="att-list">
-        <li class="att-empty" id="empty-state">
-          <i class="fa-solid fa-face-smile fa-2x" style="color: var(--border); margin-bottom: 0.6rem; display: block;"></i>
-          Waiting for face recognition…
-        </li>
-      </ul>
-    </div>
+    // Offscreen canvas for lightweight inference frame transfer
+    const offscreenCanvas = document.createElement("canvas");
+    const offscreenCtx = offscreenCanvas.getContext("2d");
+    offscreenCanvas.width = 480;
+    offscreenCanvas.height = 360;
 
-    <!-- Footer Status info -->
-    <div style="padding: 0.75rem 1.1rem; border-top: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: space-between; font-size: 0.78rem; color: var(--muted);">
-      <span><i class="fa-solid fa-shield-halved"></i> Faculty Mode: {% if is_admin %}<strong style="color: var(--green);">Logged In</strong>{% else %}Protected{% endif %}</span>
-      <span id="network-status" style="display: flex; align-items: center; gap: 0.3rem;"><i class="fa-solid fa-wifi" style="color: var(--green);"></i> Online</span>
-    </div>
+    // Client-side cooldown map: person -> timestamp
+    const cooldownMap = {};
+    const COOLDOWN_MS = 10000; // 10s cooldown per person
 
-  </div>
-
-</div>
-
-<!-- ── TOAST ─────────────────────────────────────────── -->
-<div id="toast" class="toast hidden"></div>
-
-<script src="/static/js/main.js"></script>
-<script>
-  const video = document.getElementById("webcam-video");
-  const cameraWrapper = document.getElementById("camera-wrapper");
-  const overlay = document.getElementById("camera-overlay");
-  const overlayCtx = overlay.getContext("2d");
-  const placeholder = document.getElementById("camera-placeholder");
-  const statusText = document.getElementById("camera-status-text");
-  const faceCountBadge = document.getElementById("face-count");
-  const detectStatusBadge = document.getElementById("detection-status-badge");
-  const multiFaceAlert = document.getElementById("multi-face-alert");
-  const cooldownPill = document.getElementById("cooldown-pill");
-  const cooldownText = document.getElementById("cooldown-text");
-  const cameraSelect = document.getElementById("camera-select");
-  const btnToggleDetect = document.getElementById("btn-toggle-detect");
-  const btnToggleSound = document.getElementById("btn-toggle-sound");
-  const punchModeSelect = document.getElementById("punch-mode");
-
-  let currentStream = null;
-  let streamActive = false;
-  let detectionPaused = false;
-  let soundEnabled = true;
-  let processing = false;
-
-  // Offscreen canvas for lightweight inference frame transfer
-  const offscreenCanvas = document.createElement("canvas");
-  const offscreenCtx = offscreenCanvas.getContext("2d");
-  offscreenCanvas.width = 480;
-  offscreenCanvas.height = 360;
-
-  // Client-side cooldown map: person -> timestamp
-  const cooldownMap = {};
-  const COOLDOWN_MS = 10000; // 10s cooldown per person
-
-  // ── Web Audio API Melodic Chime Synthesizer ─────────────────────────────────
-  let audioCtx = null;
-  function getAudioContext() {
-    if (!audioCtx) {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (AudioContext) audioCtx = new AudioContext();
+    // ── Web Audio API Melodic Chime Synthesizer ─────────────────────────────────
+    let audioCtx = null;
+    function getAudioContext() {
+      if (!audioCtx) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) audioCtx = new AudioContext();
+      }
+      if (audioCtx && audioCtx.state === "suspended") {
+        audioCtx.resume();
+      }
+      return audioCtx;
     }
-    if (audioCtx && audioCtx.state === "suspended") {
-      audioCtx.resume();
+
+    function playSuccessChime() {
+      if (!soundEnabled) return;
+      try {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        const now = ctx.currentTime;
+
+        // Note 1 (E5 - 659Hz)
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.type = "sine";
+        osc1.frequency.setValueAtTime(659.25, now);
+        gain1.gain.setValueAtTime(0.18, now);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.35);
+
+        // Note 2 (G#5 - 830Hz)
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = "sine";
+        osc2.frequency.setValueAtTime(830.61, now + 0.12);
+        gain2.gain.setValueAtTime(0.22, now + 0.12);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.start(now + 0.12);
+        osc2.stop(now + 0.55);
+      } catch (e) {
+        console.warn("Audio chime error:", e);
+      }
     }
-    return audioCtx;
-  }
 
-  function playSuccessChime() {
-    if (!soundEnabled) return;
-    try {
-      const ctx = getAudioContext();
-      if (!ctx) return;
-      const now = ctx.currentTime;
-
-      // Note 1 (E5 - 659Hz)
-      const osc1 = ctx.createOscillator();
-      const gain1 = ctx.createGain();
-      osc1.type = "sine";
-      osc1.frequency.setValueAtTime(659.25, now);
-      gain1.gain.setValueAtTime(0.18, now);
-      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-      osc1.connect(gain1);
-      gain1.connect(ctx.destination);
-      osc1.start(now);
-      osc1.stop(now + 0.35);
-
-      // Note 2 (G#5 - 830Hz)
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
-      osc2.type = "sine";
-      osc2.frequency.setValueAtTime(830.61, now + 0.12);
-      gain2.gain.setValueAtTime(0.22, now + 0.12);
-      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
-      osc2.connect(gain2);
-      gain2.connect(ctx.destination);
-      osc2.start(now + 0.12);
-      osc2.stop(now + 0.55);
-    } catch (e) {
-      console.warn("Audio chime error:", e);
+    // ── Web Speech Synthesis (TTS Voice Announcement) ───────────────────────────
+    function speakAnnouncement(text) {
+      if (!soundEnabled || !("speechSynthesis" in window)) return;
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1.05;
+        utterance.pitch = 1.0;
+        utterance.volume = 0.9;
+        window.speechSynthesis.speak(utterance);
+      } catch (e) {
+        console.warn("TTS error:", e);
+      }
     }
-  }
 
-  // ── Web Speech Synthesis (TTS Voice Announcement) ───────────────────────────
-  function speakAnnouncement(text) {
-    if (!soundEnabled || !("speechSynthesis" in window)) return;
-    try {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.05;
-      utterance.pitch = 1.0;
-      utterance.volume = 0.9;
-      window.speechSynthesis.speak(utterance);
-    } catch (e) {
-      console.warn("TTS error:", e);
+    // ── Camera Device Enumeration & Initialization ──────────────────────────────
+    async function listCameras() {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(d => d.kind === "videoinput");
+        cameraSelect.innerHTML = "";
+        videoDevices.forEach((device, index) => {
+          const option = document.createElement("option");
+          option.value = device.deviceId;
+          option.text = device.label || `Camera ${index + 1}`;
+          cameraSelect.appendChild(option);
+        });
+      } catch (e) {
+        console.warn("Camera enumeration error:", e);
+      }
     }
-  }
 
-  // ── Camera Device Enumeration & Initialization ──────────────────────────────
-  async function listCameras() {
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const videoDevices = devices.filter(d => d.kind === "videoinput");
-      cameraSelect.innerHTML = "";
-      videoDevices.forEach((device, index) => {
-        const option = document.createElement("option");
-        option.value = device.deviceId;
-        option.text = device.label || `Camera ${index + 1}`;
-        cameraSelect.appendChild(option);
-      });
-    } catch (e) {
-      console.warn("Camera enumeration error:", e);
-    }
-  }
+    async function initWebcam(deviceId = null) {
+      try {
+        statusText.textContent = "Requesting camera permissions…";
+        if (currentStream) {
+          currentStream.getTracks().forEach(track => track.stop());
+        }
 
-  async function initWebcam(deviceId = null) {
-    try {
-      statusText.textContent = "Requesting camera permissions…";
-      if (currentStream) {
-        currentStream.getTracks().forEach(track => track.stop());
+        const constraints = {
+          video: {
+            deviceId: deviceId ? { exact: deviceId } : undefined,
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            facingMode: deviceId ? undefined : "user"
+          },
+          audio: false
+        };
+
+        currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = currentStream;
+        await video.play();
+        streamActive = true;
+        placeholder.classList.add("hidden");
+        resizeOverlay();
+        listCameras();
+      } catch (err) {
+        console.error("Camera access error:", err);
+        placeholder.classList.remove("hidden");
+        if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+          statusText.innerHTML = "<strong style='color:#ef4444;'>Camera permission is blocked!</strong><br/><span style='font-size:0.82rem;color:var(--muted);display:block;margin-top:4px;'>Click the 🔒 lock icon (or camera icon) on the left side of your browser URL bar, set Camera to <strong>'Allow'</strong>, then refresh.</span>";
+          showToast("Camera blocked: Click lock icon in browser address bar to allow", "error");
+        } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
+          statusText.innerHTML = "<strong style='color:#eab308;'>Camera is in use by another app!</strong><br/><span style='font-size:0.82rem;color:var(--muted);display:block;margin-top:4px;'>Close Zoom, Teams, or any other camera apps, then click Retry.</span>";
+          showToast("Camera hardware is busy/in use", "error");
+        } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+          statusText.innerHTML = "<strong style='color:#ef4444;'>No camera hardware found!</strong><br/><span style='font-size:0.82rem;color:var(--muted);display:block;margin-top:4px;'>Please plug in a USB webcam or turn on your laptop camera.</span>";
+          showToast("No camera hardware detected", "error");
+        } else {
+          statusText.textContent = "Camera error: " + (err.message || err.name);
+          showToast("Camera error: " + (err.message || err.name), "error");
+        }
       }
 
-      const constraints = {
-        video: {
-          deviceId: deviceId ? { exact: deviceId } : undefined,
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          facingMode: deviceId ? undefined : "user"
-        },
-        audio: false
-      };
+    }
 
-      currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-      video.srcObject = currentStream;
-      await video.play();
-      streamActive = true;
-      placeholder.classList.add("hidden");
-      resizeOverlay();
-      listCameras();
-    } catch (err) {
-      console.error("Camera access error:", err);
-      placeholder.classList.remove("hidden");
-      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-        statusText.innerHTML = "<strong style='color:#ef4444;'>Camera permission is blocked!</strong><br/><span style='font-size:0.82rem;color:var(--muted);display:block;margin-top:4px;'>Click the 🔒 lock icon (or camera icon) on the left side of your browser URL bar, set Camera to <strong>'Allow'</strong>, then refresh.</span>";
-        showToast("Camera blocked: Click lock icon in browser address bar to allow", "error");
-      } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
-        statusText.innerHTML = "<strong style='color:#eab308;'>Camera is in use by another app!</strong><br/><span style='font-size:0.82rem;color:var(--muted);display:block;margin-top:4px;'>Close Zoom, Teams, or any other camera apps, then click Retry.</span>";
-        showToast("Camera hardware is busy/in use", "error");
-      } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
-        statusText.innerHTML = "<strong style='color:#ef4444;'>No camera hardware found!</strong><br/><span style='font-size:0.82rem;color:var(--muted);display:block;margin-top:4px;'>Please plug in a USB webcam or turn on your laptop camera.</span>";
-        showToast("No camera hardware detected", "error");
+    cameraSelect.addEventListener("change", () => {
+      if (cameraSelect.value) {
+        initWebcam(cameraSelect.value);
+      }
+    });
+
+    // Toggle Detection (Pause / Resume)
+    btnToggleDetect.addEventListener("click", () => {
+      detectionPaused = !detectionPaused;
+      if (detectionPaused) {
+        document.getElementById("detect-icon").className = "fa-solid fa-play";
+        document.getElementById("detect-label").textContent = "Resume";
+        detectStatusBadge.textContent = "Paused";
+        detectStatusBadge.style.background = "rgba(234, 179, 8, 0.15)";
+        detectStatusBadge.style.color = "#eab308";
+        detectStatusBadge.style.borderColor = "rgba(234, 179, 8, 0.3)";
+        overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+        faceCountBadge.textContent = "Paused";
       } else {
-        statusText.textContent = "Camera error: " + (err.message || err.name);
-        showToast("Camera error: " + (err.message || err.name), "error");
+        document.getElementById("detect-icon").className = "fa-solid fa-pause";
+        document.getElementById("detect-label").textContent = "Pause";
+        detectStatusBadge.textContent = "Active";
+        detectStatusBadge.style.background = "rgba(34, 197, 94, 0.15)";
+        detectStatusBadge.style.color = "var(--green)";
+        detectStatusBadge.style.borderColor = "rgba(34, 197, 94, 0.3)";
+      }
+    });
+
+    // Toggle Sound
+    btnToggleSound.addEventListener("click", () => {
+      soundEnabled = !soundEnabled;
+      const icon = document.getElementById("sound-icon");
+      const label = document.getElementById("sound-label");
+      if (soundEnabled) {
+        icon.className = "fa-solid fa-volume-high";
+        label.textContent = "Audio On";
+        btnToggleSound.style.borderColor = "var(--border)";
+        getAudioContext(); // warm up audio
+        showToast("Audio announcements enabled", "success");
+      } else {
+        icon.className = "fa-solid fa-volume-xmark";
+        label.textContent = "Muted";
+        btnToggleSound.style.borderColor = "rgba(239, 68, 68, 0.3)";
+        showToast("Audio muted", "info");
+      }
+    });
+
+    function resizeOverlay() {
+      if (video.videoWidth && video.videoHeight) {
+        overlay.width = video.clientWidth;
+        overlay.height = video.clientHeight;
+      }
+    }
+    window.addEventListener("resize", resizeOverlay);
+
+    // ── Frame Processing Loop ───────────────────────────────────────────────────
+    async function processCameraFrame() {
+      if (!streamActive || detectionPaused || processing || video.readyState < 2) return;
+
+      processing = true;
+      try {
+        offscreenCtx.drawImage(video, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
+        const dataUrl = offscreenCanvas.toDataURL("image/jpeg", 0.7);
+        const punchType = punchModeSelect.value;
+
+        const res = await fetch("/api/process_frame", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: dataUrl, punch_type: punchType })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const results = data.results || [];
+          const meta = data.meta || {};
+
+          // Multiple faces warning
+          if (meta.multiple_faces) {
+            multiFaceAlert.classList.remove("hidden");
+          } else {
+            multiFaceAlert.classList.add("hidden");
+          }
+
+          drawDetections(results, meta);
+          faceCountBadge.textContent = `${data.count || 0} faces`;
+
+          // Process successful marks
+          if (data.marked && data.marked.length > 0) {
+            data.marked.forEach(entry => {
+              const now = Date.now();
+              const lastLog = cooldownMap[entry.name] || 0;
+
+              if (now - lastLog >= COOLDOWN_MS) {
+                cooldownMap[entry.name] = now;
+                handleSuccessfulRecognition(entry);
+              }
+            });
+          }
+        }
+      } catch (e) {
+        console.warn("Process frame error:", e);
+      } finally {
+        processing = false;
       }
     }
 
-  }
+    function handleSuccessfulRecognition(entry) {
+      // 1. Trigger Visual Green Flash Glow
+      cameraWrapper.classList.add("success-glow");
+      setTimeout(() => cameraWrapper.classList.remove("success-glow"), 1200);
 
-  cameraSelect.addEventListener("change", () => {
-    if (cameraSelect.value) {
-      initWebcam(cameraSelect.value);
+      // 2. Audio Chime
+      playSuccessChime();
+
+      // 3. TTS Announcement
+      if (entry.punch_type === "out") {
+        speakAnnouncement(`Goodbye, ${entry.name}! Checked out.`);
+        showToast(`👋 ${entry.name} checked out (${entry.duration})`, "success");
+      } else {
+        speakAnnouncement(`Welcome, ${entry.name}! Attendance marked.`);
+        showToast(`✅ ${entry.name} marked present!`, "success");
+      }
+      showSuccessModal(entry);
+
+      // 4. Cooldown Pill indicator
+      showCooldownBanner(entry.name);
+
+      // 5. Update attendance feed
+      refreshAttendance();
     }
-  });
 
-  // Toggle Detection (Pause / Resume)
-  btnToggleDetect.addEventListener("click", () => {
-    detectionPaused = !detectionPaused;
-    if (detectionPaused) {
-      document.getElementById("detect-icon").className = "fa-solid fa-play";
-      document.getElementById("detect-label").textContent = "Resume";
-      detectStatusBadge.textContent = "Paused";
-      detectStatusBadge.style.background = "rgba(234, 179, 8, 0.15)";
-      detectStatusBadge.style.color = "#eab308";
-      detectStatusBadge.style.borderColor = "rgba(234, 179, 8, 0.3)";
-      overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
-      faceCountBadge.textContent = "Paused";
-    } else {
-      document.getElementById("detect-icon").className = "fa-solid fa-pause";
-      document.getElementById("detect-label").textContent = "Pause";
-      detectStatusBadge.textContent = "Active";
-      detectStatusBadge.style.background = "rgba(34, 197, 94, 0.15)";
-      detectStatusBadge.style.color = "var(--green)";
-      detectStatusBadge.style.borderColor = "rgba(34, 197, 94, 0.3)";
+    function showSuccessModal(entry) {
+      recognisedName = entry.name;
+      document.getElementById("success-title").textContent =
+        entry.punch_type === "out" ? `Goodbye, ${entry.name}!` : `Welcome, ${entry.name}!`;
+      document.getElementById("success-details").textContent =
+        entry.punch_type === "out"
+          ? `Checked out at ${entry.time}. Duration: ${entry.duration || "--"}.`
+          : `Checked in at ${entry.time}${entry.is_late ? " (marked as late)" : ""}.`;
+      document.getElementById("success-modal").classList.remove("hidden");
+      setTimeout(closeSuccessModal, 5000);
     }
-  });
 
-  // Toggle Sound
-  btnToggleSound.addEventListener("click", () => {
-    soundEnabled = !soundEnabled;
-    const icon = document.getElementById("sound-icon");
-    const label = document.getElementById("sound-label");
-    if (soundEnabled) {
-      icon.className = "fa-solid fa-volume-high";
-      label.textContent = "Audio On";
-      btnToggleSound.style.borderColor = "var(--border)";
-      getAudioContext(); // warm up audio
-      showToast("Audio announcements enabled", "success");
-    } else {
-      icon.className = "fa-solid fa-volume-xmark";
-      label.textContent = "Muted";
-      btnToggleSound.style.borderColor = "rgba(239, 68, 68, 0.3)";
-      showToast("Audio muted", "info");
+    function closeSuccessModal() {
+      document.getElementById("success-modal").classList.add("hidden");
     }
-  });
 
-  function resizeOverlay() {
-    if (video.videoWidth && video.videoHeight) {
+    function showCooldownBanner(name) {
+      cooldownText.textContent = `${name} logged • Cooldown 10s`;
+      cooldownPill.classList.remove("hidden");
+      setTimeout(() => cooldownPill.classList.add("hidden"), 8000);
+    }
+
+    // ── Dynamic Bounding Boxes Rendering ────────────────────────────────────────
+    function drawDetections(results, meta) {
       overlay.width = video.clientWidth;
       overlay.height = video.clientHeight;
-    }
-  }
-  window.addEventListener("resize", resizeOverlay);
+      overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
 
-  // ── Frame Processing Loop ───────────────────────────────────────────────────
-  async function processCameraFrame() {
-    if (!streamActive || detectionPaused || processing || video.readyState < 2) return;
+      if (!results || results.length === 0) return;
 
-    processing = true;
-    try {
-      offscreenCtx.drawImage(video, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
-      const dataUrl = offscreenCanvas.toDataURL("image/jpeg", 0.7);
-      const punchType = punchModeSelect.value;
+      const scaleX = overlay.width / offscreenCanvas.width;
+      const scaleY = overlay.height / offscreenCanvas.height;
 
-      const res = await fetch("/api/process_frame", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: dataUrl, punch_type: punchType })
-      });
+      results.forEach(r => {
+        const [x, y, w, h] = r.box;
+        const rx = x * scaleX;
+        const ry = y * scaleY;
+        const rw = w * scaleX;
+        const rh = h * scaleY;
 
-      if (res.ok) {
-        const data = await res.json();
-        const results = data.results || [];
-        const meta = data.meta || {};
+        let color = "#ef4444"; // Red for unknown
+        let tagText = "Unknown Face";
 
-        // Multiple faces warning
         if (meta.multiple_faces) {
-          multiFaceAlert.classList.remove("hidden");
-        } else {
-          multiFaceAlert.classList.add("hidden");
+          color = "#ef4444";
+          tagText = "Multiple Detected";
+        } else if (r.status === "known") {
+          color = "#22c55e"; // Vibrant Green
+          tagText = `${r.name} (${r.confidence}%)`;
+        } else if (r.status === "low_confidence") {
+          color = "#eab308"; // Amber / Yellow
+          tagText = `Low Confidence (${r.confidence}%)`;
         }
 
-        drawDetections(results, meta);
-        faceCountBadge.textContent = `${data.count || 0} faces`;
+        // Draw bounding rectangle
+        overlayCtx.strokeStyle = color;
+        overlayCtx.lineWidth = 3;
+        overlayCtx.strokeRect(rx, ry, rw, rh);
 
-        // Process successful marks
-        if (data.marked && data.marked.length > 0) {
-          data.marked.forEach(entry => {
-            const now = Date.now();
-            const lastLog = cooldownMap[entry.name] || 0;
+        // Draw corner accent brackets
+        const corner = Math.min(rw, rh) * 0.2;
+        overlayCtx.strokeStyle = "#ffffff";
+        overlayCtx.lineWidth = 2;
 
-            if (now - lastLog >= COOLDOWN_MS) {
-              cooldownMap[entry.name] = now;
-              handleSuccessfulRecognition(entry);
-            }
-          });
+        // Top-left
+        overlayCtx.beginPath();
+        overlayCtx.moveTo(rx, ry + corner);
+        overlayCtx.lineTo(rx, ry);
+        overlayCtx.lineTo(rx + corner, ry);
+        overlayCtx.stroke();
+
+        // Top-right
+        overlayCtx.beginPath();
+        overlayCtx.moveTo(rx + rw - corner, ry);
+        overlayCtx.lineTo(rx + rw, ry);
+        overlayCtx.lineTo(rx + rw, ry + corner);
+        overlayCtx.stroke();
+
+        // Label background pill
+        overlayCtx.font = "bold 13px sans-serif";
+        const textWidth = overlayCtx.measureText(tagText).width + 16;
+        const tagY = Math.max(22, ry - 8);
+
+        overlayCtx.fillStyle = color;
+        overlayCtx.beginPath();
+        overlayCtx.roundRect(rx, tagY - 20, textWidth, 22, 4);
+        overlayCtx.fill();
+
+        // Label text
+        overlayCtx.fillStyle = color === "#eab308" ? "#000000" : "#ffffff";
+        overlayCtx.fillText(tagText, rx + 8, tagY - 5);
+      });
+    }
+
+    // ── Animated Counter Helper ─────────────────────────────────────────────────
+    function animateValue(elem, start, end, duration = 600) {
+      if (start === end) {
+        elem.textContent = end;
+        return;
+      }
+      const range = end - start;
+      let current = start;
+      const increment = end > start ? 1 : -1;
+      const stepTime = Math.abs(Math.floor(duration / range));
+      const timer = setInterval(() => {
+        current += increment;
+        elem.textContent = current;
+        if (current === end) {
+          clearInterval(timer);
         }
-      }
-    } catch (e) {
-      console.warn("Process frame error:", e);
-    } finally {
-      processing = false;
-    }
-  }
-
-  function handleSuccessfulRecognition(entry) {
-    // 1. Trigger Visual Green Flash Glow
-    cameraWrapper.classList.add("success-glow");
-    setTimeout(() => cameraWrapper.classList.remove("success-glow"), 1200);
-
-    // 2. Audio Chime
-    playSuccessChime();
-
-    // 3. TTS Announcement
-    if (entry.punch_type === "out") {
-      speakAnnouncement(`Goodbye, ${entry.name}! Checked out.`);
-      showToast(`👋 ${entry.name} checked out (${entry.duration})`, "success");
-    } else {
-      speakAnnouncement(`Welcome, ${entry.name}! Attendance marked.`);
-      showToast(`✅ ${entry.name} marked present!`, "success");
+      }, Math.max(stepTime, 20));
     }
 
-    // 4. Cooldown Pill indicator
-    showCooldownBanner(entry.name);
+    // ── Today's Attendance Feed & Stats Poll ────────────────────────────────────
+    let lastPresentCount = 0;
+    let lastRegisteredCount = 0;
+    let lastAbsentCount = 0;
 
-    // 5. Update attendance feed
-    refreshAttendance();
-  }
+    async function refreshAttendance() {
+      const today = document.getElementById("today-date").textContent;
+      try {
+        const [attRes, regRes] = await Promise.all([
+          fetch(`/api/attendance?date=${today}`),
+          fetch("/api/registered")
+        ]);
 
-  function showCooldownBanner(name) {
-    cooldownText.textContent = `${name} logged • Cooldown 10s`;
-    cooldownPill.classList.remove("hidden");
-    setTimeout(() => cooldownPill.classList.add("hidden"), 8000);
-  }
+        const data = await attRes.json();
+        const registered = await regRes.json();
 
-  // ── Dynamic Bounding Boxes Rendering ────────────────────────────────────────
-  function drawDetections(results, meta) {
-    overlay.width = video.clientWidth;
-    overlay.height = video.clientHeight;
-    overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+        const present = data.records || [];
+        const presentNames = present.map(r => r.name);
+        const absent = registered.filter(n => !presentNames.includes(n));
 
-    if (!results || results.length === 0) return;
+        // Animated counters
+        animateValue(document.getElementById("present-count"), lastPresentCount, present.length);
+        animateValue(document.getElementById("registered-count"), lastRegisteredCount, registered.length);
+        animateValue(document.getElementById("absent-count"), lastAbsentCount, absent.length);
 
-    const scaleX = overlay.width / offscreenCanvas.width;
-    const scaleY = overlay.height / offscreenCanvas.height;
+        lastPresentCount = present.length;
+        lastRegisteredCount = registered.length;
+        lastAbsentCount = absent.length;
 
-    results.forEach(r => {
-      const [x, y, w, h] = r.box;
-      const rx = x * scaleX;
-      const ry = y * scaleY;
-      const rw = w * scaleX;
-      const rh = h * scaleY;
+        const current = recognisedName && present.find(r => r.name === recognisedName);
+        if (current) {
+          fetch("/api/person-summary")
+            .then(r => r.json())
+            .then(summary => {
+              const person = (summary.records || []).find(r => r.name === recognisedName);
+              if (!person) return;
+              const percent = Math.min(100, person.percentage);
+              document.getElementById("personal-percent").textContent = `${percent}%`;
+              document.getElementById("personal-progress").style.width = `${percent}%`;
+              document.getElementById("personal-progress").classList.toggle("progress-risk", percent < 75);
+              document.getElementById("personal-status").textContent =
+                percent < 75 ? "You are below 75%. A few more present days will improve your score." : "Great work — you are currently eligible.";
+            })
+            .catch(() => {});
+        }
 
-      let color = "#ef4444"; // Red for unknown
-      let tagText = "Unknown Face";
-
-      if (meta.multiple_faces) {
-        color = "#ef4444";
-        tagText = "Multiple Detected";
-      } else if (r.status === "known") {
-        color = "#22c55e"; // Vibrant Green
-        tagText = `${r.name} (${r.confidence}%)`;
-      } else if (r.status === "low_confidence") {
-        color = "#eab308"; // Amber / Yellow
-        tagText = `Low Confidence (${r.confidence}%)`;
-      }
-
-      // Draw bounding rectangle
-      overlayCtx.strokeStyle = color;
-      overlayCtx.lineWidth = 3;
-      overlayCtx.strokeRect(rx, ry, rw, rh);
-
-      // Draw corner accent brackets
-      const corner = Math.min(rw, rh) * 0.2;
-      overlayCtx.strokeStyle = "#ffffff";
-      overlayCtx.lineWidth = 2;
-      
-      // Top-left
-      overlayCtx.beginPath();
-      overlayCtx.moveTo(rx, ry + corner);
-      overlayCtx.lineTo(rx, ry);
-      overlayCtx.lineTo(rx + corner, ry);
-      overlayCtx.stroke();
-
-      // Top-right
-      overlayCtx.beginPath();
-      overlayCtx.moveTo(rx + rw - corner, ry);
-      overlayCtx.lineTo(rx + rw, ry);
-      overlayCtx.lineTo(rx + rw, ry + corner);
-      overlayCtx.stroke();
-
-      // Label background pill
-      overlayCtx.font = "bold 13px sans-serif";
-      const textWidth = overlayCtx.measureText(tagText).width + 16;
-      const tagY = Math.max(22, ry - 8);
-
-      overlayCtx.fillStyle = color;
-      overlayCtx.beginPath();
-      overlayCtx.roundRect(rx, tagY - 20, textWidth, 22, 4);
-      overlayCtx.fill();
-
-      // Label text
-      overlayCtx.fillStyle = color === "#eab308" ? "#000000" : "#ffffff";
-      overlayCtx.fillText(tagText, rx + 8, tagY - 5);
-    });
-  }
-
-  // ── Animated Counter Helper ─────────────────────────────────────────────────
-  function animateValue(elem, start, end, duration = 600) {
-    if (start === end) {
-      elem.textContent = end;
-      return;
-    }
-    const range = end - start;
-    let current = start;
-    const increment = end > start ? 1 : -1;
-    const stepTime = Math.abs(Math.floor(duration / range));
-    const timer = setInterval(() => {
-      current += increment;
-      elem.textContent = current;
-      if (current === end) {
-        clearInterval(timer);
-      }
-    }, Math.max(stepTime, 20));
-  }
-
-  // ── Today's Attendance Feed & Stats Poll ────────────────────────────────────
-  let lastPresentCount = 0;
-  let lastRegisteredCount = 0;
-  let lastAbsentCount = 0;
-
-  async function refreshAttendance() {
-    const today = document.getElementById("today-date").textContent;
-    try {
-      const [attRes, regRes] = await Promise.all([
-        fetch(`/api/attendance?date=${today}`),
-        fetch("/api/registered")
-      ]);
-
-      const data = await attRes.json();
-      const registered = await regRes.json();
-
-      const present = data.records || [];
-      const presentNames = present.map(r => r.name);
-      const absent = registered.filter(n => !presentNames.includes(n));
-
-      // Animated counters
-      animateValue(document.getElementById("present-count"), lastPresentCount, present.length);
-      animateValue(document.getElementById("registered-count"), lastRegisteredCount, registered.length);
-      animateValue(document.getElementById("absent-count"), lastAbsentCount, absent.length);
-
-      lastPresentCount = present.length;
-      lastRegisteredCount = registered.length;
-      lastAbsentCount = absent.length;
-
-      const list = document.getElementById("att-list");
-      if (present.length === 0) {
-        list.innerHTML = `
+        const list = document.getElementById("att-list");
+        if (present.length === 0) {
+          list.innerHTML = `
           <li class="att-empty" id="empty-state">
             <i class="fa-solid fa-face-smile fa-2x" style="color: var(--border); margin-bottom: 0.6rem; display: block;"></i>
             Waiting for face recognition…
           </li>`;
-      } else {
-        const existingNames = [...list.querySelectorAll("[data-name]")].map(el => el.dataset.name);
-        
-        list.innerHTML = present.map(r => {
-          const isNew = !existingNames.includes(r.name);
-          const hasCheckOut = r.check_out && r.check_out !== "--";
+        } else {
+          const existingNames = [...list.querySelectorAll("[data-name]")].map(el => el.dataset.name);
 
-          return `
+          list.innerHTML = present.map(r => {
+            const isNew = !existingNames.includes(r.name);
+            const hasCheckOut = r.check_out && r.check_out !== "--";
+
+            return `
             <li class="att-item ${isNew ? "att-new" : ""}" data-name="${r.name}">
               <span class="att-avatar">${r.name[0].toUpperCase()}</span>
               <div class="att-info">
@@ -609,20 +694,27 @@
                 <i class="fa-solid ${hasCheckOut ? 'fa-clock' : 'fa-circle-check'}" style="color: ${hasCheckOut ? '#eab308' : 'var(--green)'};"></i>
               </span>
             </li>`;
-        }).join("");
+          }).join("");
+        }
+      } catch (e) {
+        console.warn("Attendance poll error:", e);
       }
-    } catch (e) {
-      console.warn("Attendance poll error:", e);
     }
-  }
 
-  // Initialize on page load
-  window.addEventListener("DOMContentLoaded", () => {
-    initWebcam();
-    refreshAttendance();
-    setInterval(processCameraFrame, 700);
-    setInterval(refreshAttendance, 4000);
-  });
-</script>
+    // Initialize on page load
+    window.addEventListener("DOMContentLoaded", () => {
+      function updateClock() {
+        const now = new Date();
+        document.getElementById("live-time").textContent = now.toLocaleTimeString();
+      }
+      updateClock();
+      setInterval(updateClock, 1000);
+      initWebcam();
+      refreshAttendance();
+      setInterval(processCameraFrame, 700);
+      setInterval(refreshAttendance, 4000);
+    });
+  </script>
 </body>
+
 </html>

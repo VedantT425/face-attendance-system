@@ -11,9 +11,10 @@ import sqlite3
 import csv
 import os
 import io
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "data", "attendance.db")
+LATE_AFTER = time(9, 0)
 
 
 def calculate_duration(check_in: str | None, check_out: str | None) -> str:
@@ -65,9 +66,68 @@ class AttendanceManager:
             cols = [row[1] for row in cursor.fetchall()]
             if "check_out" not in cols:
                 conn.execute("ALTER TABLE attendance ADD COLUMN check_out TEXT")
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS registration_requests (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    image_path TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    created_at TEXT NOT NULL,
+                    reviewed_at TEXT
+                )
+            """)
 
     def _connect(self):
         return sqlite3.connect(DB_PATH, check_same_thread=False)
+
+    def create_registration_request(self, name: str, image_path: str) -> dict:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """INSERT INTO registration_requests
+                   (name, image_path, status, created_at)
+                   VALUES (?, ?, 'pending', ?)""",
+                (name, image_path, datetime.now().isoformat(timespec="seconds"))
+            )
+            return {"id": cursor.lastrowid, "name": name, "status": "pending"}
+
+    def get_registration_requests(self, status: str | None = None) -> list[dict]:
+        query = "SELECT id, name, image_path, status, created_at FROM registration_requests"
+        params = ()
+        if status:
+            query += " WHERE status = ?"
+            params = (status,)
+        query += " ORDER BY created_at DESC"
+        with self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [
+            {"id": r[0], "name": r[1], "image_path": r[2], "status": r[3], "created_at": r[4]}
+            for r in rows
+        ]
+
+    def review_registration_request(self, request_id: int, status: str) -> dict | None:
+        if status not in {"approved", "rejected"}:
+            raise ValueError("Invalid registration review status.")
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT id, name, image_path, status FROM registration_requests WHERE id = ?",
+                (request_id,)
+            ).fetchone()
+            if not row:
+                return None
+            conn.execute(
+                "UPDATE registration_requests SET status = ?, reviewed_at = ? WHERE id = ?",
+                (status, datetime.now().isoformat(timespec="seconds"), request_id)
+            )
+        return {"id": row[0], "name": row[1], "image_path": row[2], "status": status}
+
+    @staticmethod
+    def _is_late(check_in: str | None) -> bool:
+        if not check_in:
+            return False
+        try:
+            return datetime.strptime(check_in, "%H:%M:%S").time() > LATE_AFTER
+        except ValueError:
+            return False
 
     # ─────────────────────────────────────────────
     # Write operations
@@ -100,6 +160,7 @@ class AttendanceManager:
                         "punch_type": "in",
                         "already_marked": False,
                         "time": now,
+                        "is_late": self._is_late(now),
                         "message": f"{name} checked in at {now}"
                     }
 
@@ -128,6 +189,7 @@ class AttendanceManager:
                         "check_in": check_in_time,
                         "check_out": now,
                         "duration": duration,
+                        "is_late": self._is_late(check_in_time),
                         "message": f"{name} checked out at {now} (Duration: {duration})"
                     }
                 else:
@@ -137,6 +199,7 @@ class AttendanceManager:
                         "already_marked": True,
                         "time": check_in_time,
                         "check_out": check_out_time or "--",
+                        "is_late": self._is_late(check_in_time),
                         "message": f"{name} already checked in at {check_in_time}"
                     }
         except Exception as e:
@@ -185,7 +248,8 @@ class AttendanceManager:
                 "time": r[2],
                 "check_in": r[2],
                 "check_out": r[3] if r[3] else "--",
-                "duration": calculate_duration(r[2], r[3])
+                "duration": calculate_duration(r[2], r[3]),
+                "is_late": self._is_late(r[2])
             }
             for r in rows
         ]
@@ -204,7 +268,8 @@ class AttendanceManager:
                 "time": r[2],
                 "check_in": r[2],
                 "check_out": r[3] if r[3] else "--",
-                "duration": calculate_duration(r[2], r[3])
+                "duration": calculate_duration(r[2], r[3]),
+                "is_late": self._is_late(r[2])
             }
             for r in rows
         ]
@@ -222,7 +287,8 @@ class AttendanceManager:
                 "time": r[2],
                 "check_in": r[2],
                 "check_out": r[3] if r[3] else "--",
-                "duration": calculate_duration(r[2], r[3])
+                "duration": calculate_duration(r[2], r[3]),
+                "is_late": self._is_late(r[2])
             }
             for r in rows
         ]
@@ -243,32 +309,70 @@ class AttendanceManager:
             ).fetchall()
         return [r[0] for r in rows]
 
-    def get_defaulters(self, registered_names: list[str], threshold: float = 75.0) -> list[dict]:
-        """
-        Calculate attendance percentages and return all students who fall below the threshold (e.g. 75%).
-        """
+    def get_person_summary(self, registered_names: list[str] | None = None) -> list[dict]:
+        """Return each person's attendance percentage over the currently tracked date window."""
+        if registered_names is None:
+            registered_names = []
+
         available_dates = self.get_available_dates()
         total_days = max(1, len(available_dates))
 
-        result = []
+        results = []
         with self._connect() as conn:
-            for name in registered_names:
+            for name in sorted(registered_names):
                 count = conn.execute(
                     "SELECT COUNT(DISTINCT date) FROM attendance WHERE name = ?",
                     (name,)
-                ).fetchone()[0]
+                ).fetchone()[0] or 0
                 pct = round((count / total_days) * 100, 1)
-                result.append({
+                results.append({
                     "name": name,
                     "attended_days": count,
                     "total_days": total_days,
                     "percentage": pct,
-                    "is_defaulter": pct < threshold
                 })
 
-        # Sort: lowest attendance percentage first
-        result.sort(key=lambda x: x["percentage"])
-        return result
+        results.sort(key=lambda x: (-x["percentage"], x["name"]))
+        return results
+
+    def get_defaulters(self, registered_names: list[str], threshold: float = 75.0) -> list[dict]:
+        """
+        Calculate attendance percentages and return all students who fall below the threshold (e.g. 75%).
+        """
+        result = self.get_person_summary(registered_names)
+        for item in result:
+            item["is_defaulter"] = item["percentage"] < threshold
+
+        result.sort(key=lambda x: (x["percentage"], x["name"]))
+        return [item for item in result if item["is_defaulter"]]
+
+    def get_attendance_champions(self, registered_names: list[str], limit: int = 5) -> list[dict]:
+        """Return top performers with their consecutive attendance streak."""
+        summaries = self.get_person_summary(registered_names)
+        available_dates = self.get_available_dates()
+        champions = []
+
+        with self._connect() as conn:
+            for item in summaries:
+                rows = conn.execute(
+                    "SELECT DISTINCT date FROM attendance WHERE name = ? ORDER BY date DESC",
+                    (item["name"],)
+                ).fetchall()
+                attended_dates = {row[0] for row in rows}
+                streak = 0
+                for recorded_date in available_dates:
+                    if recorded_date in attended_dates:
+                        streak += 1
+                    else:
+                        break
+                champions.append({
+                    **item,
+                    "streak": streak,
+                    "badge": "Perfect Attendance" if item["percentage"] >= 100 else "Attendance Champion"
+                })
+
+        champions.sort(key=lambda x: (-x["percentage"], -x["streak"], -x["attended_days"], x["name"]))
+        return champions[:limit]
 
     def get_stats(self, target_date: str | None = None) -> dict:
         """Return quick stats: date, present_count, records."""

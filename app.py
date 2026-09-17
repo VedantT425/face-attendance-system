@@ -10,6 +10,7 @@ Features:
 """
 
 import base64
+import csv
 import io
 import logging
 import os
@@ -39,9 +40,12 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
 # ── App init ─────────────────────────────────────────────────────────────────
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "vedant-fc-attendance-secret-key-2026")
+app.config["TEMPLATES_AUTO_RELOAD"] = True
+app.jinja_env.auto_reload = True
 
 engine = FaceEngine()
 attendance_mgr = AttendanceManager()
+PENDING_FACES_DIR = os.path.join(os.path.dirname(__file__), "data", "pending_faces")
 
 
 # ── RBAC Decorator ────────────────────────────────────────────────────────────
@@ -170,11 +174,11 @@ def generate_mjpeg():
         time.sleep(1 / 25)
 
 
-# ── Public Routes (Kiosk) ─────────────────────────────────────────────────────
+# ── Public Routes (Attendance) ───────────────────────────────────────────────────
 
 @app.route("/")
 def index():
-    """Kiosk screen for students/employees to view live feed & mark attendance."""
+    """Attendance screen for students/employees to view live feed & mark attendance."""
     return render_template("index.html", today=date.today().isoformat())
 
 
@@ -222,6 +226,7 @@ def api_process_frame():
                         "check_in": res.get("check_in", ""),
                         "check_out": res.get("check_out", ""),
                         "duration": res.get("duration", "--"),
+                        "is_late": res.get("is_late", False),
                         "already_marked": res.get("already_marked", False),
                         "message": res.get("message", "")
                     })
@@ -245,6 +250,18 @@ def api_attendance():
 @app.route("/api/summary")
 def api_summary():
     return jsonify(attendance_mgr.get_summary_by_date())
+
+
+@app.route("/api/person-summary")
+def api_person_summary():
+    registered = engine.get_registered_names()
+    summary = attendance_mgr.get_person_summary(registered)
+    return jsonify({
+        "count": len(summary),
+        "records": summary,
+        "eligible": sum(1 for r in summary if r["percentage"] >= 75.0),
+        "at_risk": sum(1 for r in summary if r["percentage"] < 75.0)
+    })
 
 
 @app.route("/api/registered")
@@ -280,14 +297,13 @@ def logout():
 # ── Protected Admin Routes ────────────────────────────────────────────────────
 
 @app.route("/register")
-@admin_required
 def register_page():
     return render_template("register.html",
-                           registered=engine.get_registered_names())
+                           registered=engine.get_registered_names(),
+                           pending_requests=attendance_mgr.get_registration_requests("pending"))
 
 
 @app.route("/api/register", methods=["POST"])
-@admin_required
 def api_register():
     data = request.get_json(force=True)
     name = data.get("name", "").strip()
@@ -305,6 +321,25 @@ def api_register():
     except Exception as e:
         return jsonify({"success": False, "message": f"Image decode error: {e}"}), 400
 
+    if not session.get("is_admin"):
+        if engine.get_registered_names() and name.title() in engine.get_registered_names():
+            return jsonify({"success": False, "message": "This student is already approved."}), 409
+        if engine._extract_face(frame) is None:
+            return jsonify({"success": False, "message": "No clear face detected. Please try again."}), 422
+        os.makedirs(PENDING_FACES_DIR, exist_ok=True)
+        safe_name = "".join(c if c.isalnum() else "_" for c in name.title())
+        file_name = f"{safe_name}_{int(time.time() * 1000)}.jpg"
+        image_path = os.path.join(PENDING_FACES_DIR, file_name)
+        if not cv2.imwrite(image_path, frame):
+            return jsonify({"success": False, "message": "Could not save registration request."}), 500
+        request_record = attendance_mgr.create_registration_request(name.title(), image_path)
+        return jsonify({
+            "success": True,
+            "pending": True,
+            "request_id": request_record["id"],
+            "message": "Registration request sent to teacher for approval."
+        }), 202
+
     result = engine.register_face(name, frame)
     status = 200 if result["success"] else 422
     return jsonify(result), status
@@ -317,6 +352,29 @@ def api_delete_person():
     name = data.get("name", "").strip()
     result = engine.delete_person(name)
     return jsonify(result), (200 if result["success"] else 404)
+
+
+@app.route("/api/registration-requests/<int:request_id>/review", methods=["POST"])
+@admin_required
+def review_registration_request(request_id):
+    data = request.get_json(force=True)
+    decision = data.get("status", "")
+    request_record = attendance_mgr.review_registration_request(request_id, decision)
+    if not request_record:
+        return jsonify({"success": False, "message": "Registration request not found."}), 404
+    if decision == "approved":
+        try:
+            image = cv2.imread(request_record["image_path"])
+            if image is None:
+                raise ValueError("Registration image could not be read.")
+            result = engine.register_face(request_record["name"], image)
+            if not result["success"]:
+                attendance_mgr.review_registration_request(request_id, "rejected")
+                return jsonify(result), 422
+        except Exception as exc:
+            logger.exception("Failed to approve registration request %s", request_id)
+            return jsonify({"success": False, "message": str(exc)}), 500
+    return jsonify({"success": True, "message": f"Request {decision}.", "request": request_record})
 
 
 @app.route("/api/mark_manual", methods=["POST"])
@@ -348,7 +406,8 @@ def dashboard():
     registered = engine.get_registered_names()
     present_names = {r["name"] for r in records}
     absent = [n for n in registered if n not in present_names]
-    defaulters = attendance_mgr.get_defaulters(registered, threshold=75.0)
+    champions = attendance_mgr.get_attendance_champions(registered)
+    pending_requests = attendance_mgr.get_registration_requests("pending")
 
     return render_template("dashboard.html",
                            records=records,
@@ -358,7 +417,9 @@ def dashboard():
                            end_date=end_date or "",
                            dates=dates,
                            registered=registered,
-                           defaulters=defaulters)
+                           defaulters=[],
+                           champions=champions,
+                           pending_requests=pending_requests)
 
 
 @app.route("/api/defaulters")
@@ -367,6 +428,23 @@ def api_defaulters():
     threshold = float(request.args.get("threshold", 75.0))
     registered = engine.get_registered_names()
     defaulters = attendance_mgr.get_defaulters(registered, threshold=threshold)
+    fmt = request.args.get("format")
+    if fmt == "csv":
+        output = io.StringIO()
+        fieldnames = ["name", "attended_days", "total_days", "percentage", "is_defaulter"]
+        writer = csv.DictWriter(output, fieldnames=fieldnames)
+        writer.writeheader()
+        for item in defaulters:
+            writer.writerow({
+                "name": item["name"],
+                "attended_days": item["attended_days"],
+                "total_days": item["total_days"],
+                "percentage": item["percentage"],
+                "is_defaulter": item["is_defaulter"],
+            })
+        return send_file(io.BytesIO(output.getvalue().encode("utf-8")), mimetype="text/csv",
+                         as_attachment=True, download_name="defaulters_report.csv")
+
     return jsonify({
         "threshold": threshold,
         "records": defaulters,
@@ -396,6 +474,6 @@ if __name__ == "__main__":
     mode = "DEMO" if DEMO_MODE else "LIVE"
     print(f"  Mode: {mode}")
     print("  Admin Credentials: admin / admin123")
-    print("  Open Kiosk: http://localhost:5000")
+    print("  Open Attendance: http://localhost:5000")
     print("=" * 55 + "\n")
     app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)

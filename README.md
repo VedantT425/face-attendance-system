@@ -17,7 +17,7 @@ A **real-time, browser-based Face Recognition Attendance System** built with Pyt
 | 🧠 **Face Recognition** | dlib 128-d face encodings with configurable tolerance |
 | 📋 **Auto Attendance** | Marks present once per person per day automatically |
 | 📊 **Analytics Dashboard** | Pie chart, 30-day bar chart, present/absent tables |
-| 👤 **Face Registration** | Enroll new people via webcam with 3-photo capture |
+| 👤 **Face Registration** | Submit new faces via webcam; teacher approval activates recognition |
 | 📁 **CSV Export** | Download attendance for any date or all records |
 | 🔒 **Duplicate Prevention** | SQLite UNIQUE constraint prevents double entries |
 | 📱 **Responsive UI** | Modern dark theme, works on any screen size |
@@ -88,10 +88,11 @@ Open **http://localhost:5000** in your browser.
 ## 🚀 Usage
 
 ### 1️⃣ Register Faces
-1. Navigate to **Register** (`/register`)
+1. Navigate to **Register** (`/register`) from the live attendance page
 2. Enter the person's name
 3. Click **Capture Photo** 3 times (move slightly between captures)
-4. Click **Register** — encodings are saved immediately
+4. Click **Register** — a pending request is sent to the teacher
+5. A teacher signs in to the dashboard and approves the request; only then is face recognition activated
 
 ### 2️⃣ Take Attendance
 1. Go to **Live** (`/`) — the camera starts automatically
@@ -145,4 +146,3 @@ RECOGNITION_INTERVAL = 5  # Run FR every N frames (lower = more CPU)
 ## 📄 License
 
 MIT © 2024 — Free to use for personal and educational projects.
-
