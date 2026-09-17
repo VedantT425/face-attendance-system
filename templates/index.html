@@ -714,6 +714,9 @@
       setInterval(processCameraFrame, 700);
       setInterval(refreshAttendance, 4000);
     });
+    window.addEventListener("beforeunload", () => {
+      if (currentStream) currentStream.getTracks().forEach(track => track.stop());
+    });
   </script>
 </body>
 

@@ -139,15 +139,16 @@
     const MAX_CAPTURES = 3;
     let captures = [];
     let streamActive = false;
+    let currentStream = null;
 
     async function initWebcam() {
       try {
         camStatus.textContent = "Connecting to webcam…";
-        const stream = await navigator.mediaDevices.getUserMedia({
+        currentStream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
           audio: false
         });
-        video.srcObject = stream;
+        video.srcObject = currentStream;
         await video.play();
         streamActive = true;
         placeholder.classList.add("hidden");
@@ -157,7 +158,7 @@
         if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
           camStatus.innerHTML = "<strong style='color:#ef4444;'>Camera blocked in browser!</strong><br/><span style='font-size:0.8rem;color:var(--muted);'>Click the 🔒 icon in the URL bar and select 'Allow' for Camera.</span>";
         } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
-          camStatus.innerHTML = "<strong style='color:#eab308;'>Camera is in use by another app!</strong><br/><span style='font-size:0.8rem;color:var(--muted);'>Close other apps using camera or use 'Upload Image' below.</span>";
+          camStatus.innerHTML = "<strong style='color:#eab308;'>Camera is already in use!</strong><br/><span style='font-size:0.8rem;color:var(--muted);'>Close another attendance/register tab, Zoom, Teams, or any camera app, then try again.</span>";
         } else {
           camStatus.textContent = "Webcam unavailable. You can use 'Upload Image' below.";
         }
@@ -293,7 +294,12 @@
       regMessage.className = `reg-message reg-${type}`;
     }
 
-    window.addEventListener("DOMContentLoaded", initWebcam);
+    // Registration camera starts only after the user clicks "Start Camera".
+    // This prevents the live attendance page and registration page from
+    // competing for the same browser camera when both tabs are open.
+    window.addEventListener("beforeunload", () => {
+      if (currentStream) currentStream.getTracks().forEach(track => track.stop());
+    });
   </script>
 </body>
 
