@@ -213,7 +213,7 @@ class FaceEngine:
         faces = self.detector.detectMultiScale(
             gray_eq,
             scaleFactor=1.1,
-            minNeighbors=5,
+            minNeighbors=4,
             minSize=(60, 60),
             flags=cv2.CASCADE_SCALE_IMAGE
         )
@@ -282,4 +282,3 @@ class FaceEngine:
             "face_count": len(faces)
         }
         return frame_bgr, results, meta
-

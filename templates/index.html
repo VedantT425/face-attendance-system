@@ -244,8 +244,9 @@
     // Offscreen canvas for lightweight inference frame transfer
     const offscreenCanvas = document.createElement("canvas");
     const offscreenCtx = offscreenCanvas.getContext("2d");
-    offscreenCanvas.width = 480;
-    offscreenCanvas.height = 360;
+    // Keep enough detail for LBPH while avoiding oversized network payloads.
+    offscreenCanvas.width = 640;
+    offscreenCanvas.height = 480;
 
     // Client-side cooldown map: person -> timestamp
     const cooldownMap = {};
@@ -437,7 +438,7 @@
       processing = true;
       try {
         offscreenCtx.drawImage(video, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
-        const dataUrl = offscreenCanvas.toDataURL("image/jpeg", 0.7);
+        const dataUrl = offscreenCanvas.toDataURL("image/jpeg", 0.78);
         const punchType = punchModeSelect.value;
 
         const res = await fetch("/api/process_frame", {
@@ -711,7 +712,9 @@
       setInterval(updateClock, 1000);
       initWebcam();
       refreshAttendance();
-      setInterval(processCameraFrame, 700);
+      // Start immediately, then retry frequently while the previous request is in flight.
+      setTimeout(processCameraFrame, 250);
+      setInterval(processCameraFrame, 350);
       setInterval(refreshAttendance, 4000);
     });
     window.addEventListener("beforeunload", () => {
