@@ -357,23 +357,41 @@
         } else {
           showToast(data.message || "Failed to mark", "error");
         }
-
-        async function reviewRegistration(id, status) {
-          try {
-            const response = await fetch(`/api/registration-requests/${id}/review`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ status })
-            });
-            const data = await response.json();
-            showToast(data.message || "Request updated.", data.success ? "success" : "error");
-            if (data.success) document.getElementById(`request-${id}`)?.remove();
-          } catch (error) {
-            showToast("Could not update registration request.", "error");
-          }
-        }
       } catch (err) {
         showToast("Network error: " + err.message, "error");
+      }
+    }
+
+    async function reviewRegistration(id, status) {
+      const row = document.getElementById(`request-${id}`);
+      const buttons = row ? row.querySelectorAll("button") : [];
+      buttons.forEach((button) => {
+        button.disabled = true;
+        button.classList.add("is-loading");
+      });
+
+      try {
+        const response = await fetch(`/api/registration-requests/${id}/review`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status })
+        });
+        const data = await response.json();
+        showToast(data.message || "Request updated.", data.success ? "success" : "error");
+        if (data.success && row) {
+          row.remove();
+        } else {
+          buttons.forEach((button) => {
+            button.disabled = false;
+            button.classList.remove("is-loading");
+          });
+        }
+      } catch (error) {
+        buttons.forEach((button) => {
+          button.disabled = false;
+          button.classList.remove("is-loading");
+        });
+        showToast("Could not update registration request.", "error");
       }
     }
 
