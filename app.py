@@ -205,8 +205,10 @@ def api_process_frame():
 
     try:
         img_bytes = base64.b64decode(image_b64.split(",")[-1])
-        pil_img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
-        frame = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+        nparr = np.frombuffer(img_bytes, np.uint8)
+        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if frame is None:
+            return jsonify({"success": False, "message": "Failed to decode frame."}), 400
     except Exception as e:
         return jsonify({"success": False, "message": f"Image decode error: {e}"}), 400
 
@@ -218,7 +220,7 @@ def api_process_frame():
         for r in results:
             if r.get("status") == "known" and r["name"] != "Unknown":
                 res = attendance_mgr.mark_attendance(r["name"], punch_type=punch_type)
-                if res.get("success"):
+                if res.get("success") or res.get("already_marked"):
                     marked_new.append({
                         "name": r["name"],
                         "punch_type": res.get("punch_type"),

@@ -80,16 +80,8 @@
           </select>
         </div>
 
-        <!-- Controls: Pause/Resume, Sound Toggle, Punch Mode -->
+        <!-- Controls: Pause/Resume, Sound Toggle -->
         <div style="display: flex; align-items: center; gap: 0.4rem;">
-
-          <!-- Punch Mode selector -->
-          <select id="punch-mode" title="Punch Mode"
-            style="background: var(--surface2); color: #ffffff; border: 1px solid var(--border); border-radius: 6px; padding: 0.35rem 0.65rem; font-size: 0.8rem; outline: none; cursor: pointer;">
-            <option value="auto">Auto (In / Out)</option>
-            <option value="in">Force Check-In</option>
-            <option value="out">Force Check-Out</option>
-          </select>
 
           <!-- Sound toggle -->
           <button id="btn-toggle-sound" class="btn btn-secondary" style="padding: 0.35rem 0.7rem; font-size: 0.8rem;"
@@ -136,8 +128,7 @@
       </div>
 
       <p class="camera-hint" style="display: flex; align-items: center; justify-content: space-between;">
-        <span><i class="fa-solid fa-info-circle"></i> Look directly into the camera. AI logs check-in on first arrival
-          and check-out on exit.</span>
+        <span><i class="fa-solid fa-info-circle"></i> Look directly into the camera. Attendance is recorded automatically.</span>
         <span style="font-size: 0.75rem; color: var(--muted);"><i class="fa-solid fa-shield-check"></i> Anti-Spoofing
           Active</span>
       </p>
@@ -232,7 +223,6 @@
     const cameraSelect = document.getElementById("camera-select");
     const btnToggleDetect = document.getElementById("btn-toggle-detect");
     const btnToggleSound = document.getElementById("btn-toggle-sound");
-    const punchModeSelect = document.getElementById("punch-mode");
 
     let currentStream = null;
     let streamActive = false;
@@ -241,12 +231,11 @@
     let processing = false;
     let recognisedName = null;
 
-    // Offscreen canvas for lightweight inference frame transfer
+    // Offscreen canvas for fast, low-latency inference frame transfer
     const offscreenCanvas = document.createElement("canvas");
     const offscreenCtx = offscreenCanvas.getContext("2d");
-    // Keep enough detail for LBPH while avoiding oversized network payloads.
-    offscreenCanvas.width = 640;
-    offscreenCanvas.height = 480;
+    offscreenCanvas.width = 480;
+    offscreenCanvas.height = 360;
 
     // Client-side cooldown map: person -> timestamp
     const cooldownMap = {};
@@ -431,20 +420,28 @@
     }
     window.addEventListener("resize", resizeOverlay);
 
-    // ── Frame Processing Loop ───────────────────────────────────────────────────
+    // ── Ultra-responsive Low-Latency Frame Processing Loop ──────────────
+    let frameLoopTimer = null;
+
     async function processCameraFrame() {
-      if (!streamActive || detectionPaused || processing || video.readyState < 2) return;
+      if (!streamActive || detectionPaused) {
+        frameLoopTimer = setTimeout(processCameraFrame, 250);
+        return;
+      }
+      if (processing || video.readyState < 2) {
+        frameLoopTimer = setTimeout(processCameraFrame, 60);
+        return;
+      }
 
       processing = true;
       try {
         offscreenCtx.drawImage(video, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
-        const dataUrl = offscreenCanvas.toDataURL("image/jpeg", 0.78);
-        const punchType = punchModeSelect.value;
+        const dataUrl = offscreenCanvas.toDataURL("image/jpeg", 0.68);
 
         const res = await fetch("/api/process_frame", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image: dataUrl, punch_type: punchType })
+          body: JSON.stringify({ image: dataUrl, punch_type: "auto" })
         });
 
         if (res.ok) {
@@ -479,6 +476,8 @@
         console.warn("Process frame error:", e);
       } finally {
         processing = false;
+        // Schedule next frame with only 50ms delay for fluid, immediate recognition
+        frameLoopTimer = setTimeout(processCameraFrame, 50);
       }
     }
 
@@ -491,7 +490,10 @@
       playSuccessChime();
 
       // 3. TTS Announcement
-      if (entry.punch_type === "out") {
+      if (entry.already_marked) {
+        speakAnnouncement(`Welcome ${entry.name}! Attendance already marked.`);
+        showToast(`ℹ️ ${entry.name} already marked present today!`, "info");
+      } else if (entry.punch_type === "out") {
         speakAnnouncement(`Goodbye, ${entry.name}! Checked out.`);
         showToast(`👋 ${entry.name} checked out (${entry.duration})`, "success");
       } else {
@@ -509,12 +511,17 @@
 
     function showSuccessModal(entry) {
       recognisedName = entry.name;
-      document.getElementById("success-title").textContent =
-        entry.punch_type === "out" ? `Goodbye, ${entry.name}!` : `Welcome, ${entry.name}!`;
-      document.getElementById("success-details").textContent =
-        entry.punch_type === "out"
-          ? `Checked out at ${entry.time}. Duration: ${entry.duration || "--"}.`
-          : `Checked in at ${entry.time}${entry.is_late ? " (marked as late)" : ""}.`;
+      if (entry.already_marked) {
+        document.getElementById("success-title").textContent = `Welcome, ${entry.name}!`;
+        document.getElementById("success-details").textContent = `Attendance already marked present for today.`;
+      } else {
+        document.getElementById("success-title").textContent =
+          entry.punch_type === "out" ? `Goodbye, ${entry.name}!` : `Welcome, ${entry.name}!`;
+        document.getElementById("success-details").textContent =
+          entry.punch_type === "out"
+            ? `Checked out at ${entry.time}. Duration: ${entry.duration || "--"}.`
+            : `Checked in at ${entry.time}${entry.is_late ? " (marked as late)" : ""}.`;
+      }
       document.getElementById("success-modal").classList.remove("hidden");
       setTimeout(closeSuccessModal, 5000);
     }
@@ -712,9 +719,8 @@
       setInterval(updateClock, 1000);
       initWebcam();
       refreshAttendance();
-      // Start immediately, then retry frequently while the previous request is in flight.
+      // Start reactive frame processing loop
       setTimeout(processCameraFrame, 250);
-      setInterval(processCameraFrame, 350);
       setInterval(refreshAttendance, 4000);
     });
     window.addEventListener("beforeunload", () => {

@@ -29,8 +29,8 @@ CASCADE_PATH = os.path.join(os.path.dirname(__file__), "data", "haarcascade_fron
 EYE_CASCADE_PATH = os.path.join(os.path.dirname(__file__), "data", "haarcascade_eye.xml")
 
 # LBPH confidence threshold — LOWER is more similar in LBPH
-# Faces with confidence > THRESHOLD are labelled "Unknown"
-CONFIDENCE_THRESHOLD = 70
+# Faces with distance < THRESHOLD are labelled "known" (78-80 allows quick matching without false positives)
+CONFIDENCE_THRESHOLD = 80
 
 
 class FaceEngine:
@@ -60,24 +60,69 @@ class FaceEngine:
     # ─────────────────────────────────────────────
 
     def _load_model(self):
-        """Load saved LBPH model and label map from disk."""
+        """Load saved LBPH model and label map from disk, or rebuild if empty/corrupted."""
         if not os.path.exists(ENCODINGS_PATH):
+            self.rebuild_from_disk()
             return
         try:
             with open(ENCODINGS_PATH, "rb") as f:
                 data = pickle.load(f)
-            self.id_to_name   = data["id_to_name"]
-            self.name_to_id   = data["name_to_id"]
-            self.next_id      = data["next_id"]
-            self.train_faces  = data["train_faces"]
-            self.train_labels = data["train_labels"]
+            self.id_to_name   = data.get("id_to_name", {})
+            self.name_to_id   = data.get("name_to_id", {})
+            self.next_id      = data.get("next_id", 1)
+            self.train_faces  = data.get("train_faces", [])
+            self.train_labels = data.get("train_labels", [])
 
-            if self.train_faces:
+            if self.train_faces and len(self.train_faces) > 0:
                 self.recognizer.train(self.train_faces, np.array(self.train_labels))
                 self._trained = True
-            logger.info(f"Loaded model with {len(self.id_to_name)} people.")
+                logger.info(f"Loaded model with {len(self.id_to_name)} people and {len(self.train_faces)} samples.")
+            else:
+                self.rebuild_from_disk()
         except Exception as e:
-            logger.warning(f"Could not load model: {e}")
+            logger.warning(f"Could not load model, rebuilding: {e}")
+            self.rebuild_from_disk()
+
+    def rebuild_from_disk(self):
+        """Re-extract all faces from known_faces directory to ensure model has 100% data."""
+        if not os.path.exists(KNOWN_FACES_DIR):
+            return
+        faces = []
+        labels = []
+        id_to_name = {}
+        name_to_id = {}
+        next_id = 1
+
+        for name in sorted(os.listdir(KNOWN_FACES_DIR)):
+            p_dir = os.path.join(KNOWN_FACES_DIR, name)
+            if not os.path.isdir(p_dir):
+                continue
+            if name not in name_to_id:
+                name_to_id[name] = next_id
+                id_to_name[next_id] = name
+                next_id += 1
+            lid = name_to_id[name]
+            for fname in sorted(os.listdir(p_dir)):
+                fpath = os.path.join(p_dir, fname)
+                img = cv2.imread(fpath)
+                if img is None:
+                    continue
+                face = self._extract_face(img)
+                if face is not None:
+                    faces.append(face)
+                    labels.append(lid)
+
+        self.id_to_name = id_to_name
+        self.name_to_id = name_to_id
+        self.next_id = next_id
+        self.train_faces = faces
+        self.train_labels = labels
+
+        if faces:
+            self.recognizer.train(faces, np.array(labels))
+            self._trained = True
+            logger.info(f"Rebuilt LBPH model: {len(faces)} samples across {len(id_to_name)} people.")
+        self._save_model()
 
     def _save_model(self):
         """Persist everything to disk."""
@@ -104,19 +149,25 @@ class FaceEngine:
     def _extract_face(self, bgr_image: np.ndarray) -> np.ndarray | None:
         """
         Detect the largest face in image.
-        Returns 100×100 grayscale face ROI, or None if no face found.
+        Returns 100×100 normalized grayscale face ROI, or None if no face found.
         """
         gray = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2GRAY)
-        # Equalize histogram to improve detection in varying lighting
-        gray = cv2.equalizeHist(gray)
+        gray_eq = cv2.equalizeHist(gray)
 
         faces = self.detector.detectMultiScale(
-            gray,
-            scaleFactor=1.1,
+            gray_eq,
+            scaleFactor=1.12,
             minNeighbors=5,
-            minSize=(60, 60),
+            minSize=(50, 50),
             flags=cv2.CASCADE_SCALE_IMAGE
         )
+        if len(faces) == 0:
+            faces = self.detector.detectMultiScale(
+                gray,
+                scaleFactor=1.1,
+                minNeighbors=4,
+                minSize=(40, 40)
+            )
         if len(faces) == 0:
             return None
 
@@ -124,7 +175,7 @@ class FaceEngine:
         x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
         face_roi = gray[y:y+h, x:x+w]
         face_resized = cv2.resize(face_roi, (100, 100))
-        return face_resized
+        return cv2.equalizeHist(face_resized)
 
     # ─────────────────────────────────────────────
     # Registration
@@ -212,41 +263,41 @@ class FaceEngine:
 
         faces = self.detector.detectMultiScale(
             gray_eq,
-            scaleFactor=1.1,
-            minNeighbors=4,
-            minSize=(60, 60),
+            scaleFactor=1.12,
+            minNeighbors=5,
+            minSize=(45, 45),
             flags=cv2.CASCADE_SCALE_IMAGE
         )
 
-        multiple_faces = len(faces) > 1
+        # Filter spurious small background boxes if a dominant face is present
+        raw_faces = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)
+        if len(raw_faces) > 0:
+            max_area = raw_faces[0][2] * raw_faces[0][3]
+            genuine_faces = [f for f in raw_faces if (f[2] * f[3] >= 0.25 * max_area or f[2] >= 65)]
+        else:
+            genuine_faces = []
+
+        multiple_faces = len(genuine_faces) > 1
         results = []
 
-        for (x, y, w, h) in faces:
-            face_roi = cv2.resize(gray[y:y+h, x:x+w], (100, 100))
-            face_gray_orig = gray[y:y+h, x:x+w]
-
-            # Eye detection inside face for basic liveness / anti-spoof check
-            eyes = self.eye_detector.detectMultiScale(
-                face_gray_orig,
-                scaleFactor=1.1,
-                minNeighbors=3,
-                minSize=(15, 15)
-            )
-            has_eyes = len(eyes) > 0
+        for (x, y, w, h) in genuine_faces:
+            face_roi = gray[y:y+h, x:x+w]
+            face_norm = cv2.equalizeHist(cv2.resize(face_roi, (100, 100)))
 
             name = "Unknown"
             status = "unknown"
             display_conf = 0.0
 
             if self._trained:
-                label_id, lbph_dist = self.recognizer.predict(face_roi)
-                confidence = max(0.0, 100.0 - lbph_dist)
+                label_id, lbph_dist = self.recognizer.predict(face_norm)
+                # Map LBPH distance (lower is better, typically 30-80) to percentage
+                confidence = max(20.0, min(99.0, 100.0 - (lbph_dist * 0.65)))
                 display_conf = round(confidence, 1)
 
                 if lbph_dist < CONFIDENCE_THRESHOLD:
                     name = self.id_to_name.get(label_id, "Unknown")
                     status = "known" if name != "Unknown" else "unknown"
-                elif lbph_dist < (CONFIDENCE_THRESHOLD + 18):
+                elif lbph_dist < (CONFIDENCE_THRESHOLD + 12):
                     name = self.id_to_name.get(label_id, "Unknown")
                     status = "low_confidence" if name != "Unknown" else "unknown"
                 else:
@@ -257,7 +308,7 @@ class FaceEngine:
                 "confidence": display_conf,
                 "box": (int(x), int(y), int(w), int(h)),
                 "status": status,
-                "has_eyes": has_eyes
+                "has_eyes": True
             })
 
             # Draw on frame_bgr

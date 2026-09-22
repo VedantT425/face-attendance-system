@@ -11,9 +11,8 @@ env/
 # Database (local only — Render uses ephemeral storage)
 data/attendance.db
 
-# Face encodings & known faces (will need re-registration on server)
-data/encodings/model.pkl
-data/known_faces/
+# Face encodings & known faces
+data/pending_faces/
 
 # OS files
 .DS_Store
